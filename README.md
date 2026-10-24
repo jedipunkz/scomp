@@ -2,19 +2,17 @@
 
 scomp lists known vulnerabilities in the dependencies of the current Git repository and lets you browse them with an fzf-style fuzzy finder.
 
-It reads the repository's lockfiles through [osv-scanner](https://github.com/google/osv-scanner) and shows one row per package × vulnerability (OSV ID, with CVE IDs alongside).
+It reads the repository's lockfiles with [osv-scanner](https://github.com/google/osv-scanner), which is embedded as a library, and shows one row per package × vulnerability (OSV ID, with CVE IDs alongside). No separate osv-scanner install is needed.
 
 See [DESIGN.md](DESIGN.md) for the design.
 
 ## Requirements
 
-- Go 1.26 or later (to build)
+- Go 1.27 or later (to build; with the default `GOTOOLCHAIN=auto`, `go install` downloads it automatically)
 - `git`
-- `osv-scanner` v2 in `PATH`:
+- Optional: `osv-scanner` v2 in `PATH`, only for `--scanner=exec`
 
-  ```sh
-  go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
-  ```
+The binary is about 70 MB because osv-scanner is linked in.
 
 ## Install
 
@@ -34,7 +32,7 @@ scomp [flags] [path]
 | `--no-cache` | false | Do not read or write the cache |
 | `--cache-ttl` | `24h` | Cache TTL |
 | `--offline` | false | Use osv-scanner's offline vulnerability DB (see Privacy) |
-| `--scanner` | `exec` | `exec` / `lib` (`lib` is not implemented yet) |
+| `--scanner` | `lib` | `lib`: embedded osv-scanner (v2.7.0) / `exec`: run `osv-scanner` from `PATH` |
 | `--json` | false | Print findings as JSON to stdout instead of starting the TUI |
 | `--version` | | Print version |
 
@@ -76,3 +74,9 @@ go vet ./...
 ```
 
 `testdata/osv-scanner-v2.json` is trimmed output of osv-scanner 2.7.0.
+
+To check that `lib` and `exec` produce identical findings (needs network access and `osv-scanner` in `PATH`):
+
+```sh
+SCOMP_INTEGRATION=1 go test -run TestLibMatchesExec ./internal/scanner/
+```

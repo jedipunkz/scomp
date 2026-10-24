@@ -68,7 +68,7 @@ The name comes from the Star Wars scomp link (the connector R2-D2 plugs into ter
 | UI components | `charm.land/bubbles/v2` | Uses `textinput`, `viewport` |
 | Styling | `charm.land/lipgloss/v2` | |
 | Fuzzy matching | `github.com/sahilm/fuzzy` | Candidate. Returns match positions (indexes), usable for highlighting. To verify: current API and performance |
-| Vulnerability scanning (lib impl) | `github.com/google/osv-scanner/v2/pkg/osvscanner` | To verify: stability of the v2 library API and the signature of `DoScan` |
+| Vulnerability scanning (lib impl) | `github.com/google/osv-scanner/v2/pkg/osvscanner` | v2.7.0. Requires Go 1.27. `DoScan(ScannerActions)` takes no context |
 | Opening a browser | Standard library + OS-specific command | macOS `open`, Linux `xdg-open` |
 
 External commands (exec impl only): `osv-scanner` (v2), `git`.
@@ -122,7 +122,12 @@ Reason for implementing exec first: it is the smallest amount of code, and it au
 
 - Call `osvscanner.DoScan` directly. Enables single-binary distribution.
 - Migration condition: once the TUI is complete with the exec implementation and the v2 library API stability is confirmed.
-- Switch with the flag `--scanner=exec|lib`. Once the lib implementation is stable, make lib the default.
+- Switch with the flag `--scanner=exec|lib`. lib is the default (users no longer need to install osv-scanner).
+- `ScannerActions` mirrors what `osv-scanner scan source -r <root>` builds from its default flags (plugins `lockfile`, `sbom`, `directory`; call analysis `go` only). `--offline` sets `CompareOffline`, `DownloadDatabases` and `TransitiveScanning.Disabled`, matching the exec arguments.
+- The result is marshaled to JSON and passed to the same parser as exec, so both produce identical findings. `TestLibMatchesExec` (run with `SCOMP_INTEGRATION=1`) checks this.
+- `DoScan` takes no context: it runs in a goroutine, and on cancel its result is dropped.
+- osvscanner logs through a process-global logger. It is redirected with `osvscanner.SetLogger` into a buffer (shown as the error details on failure) so it does not corrupt the TUI, and scans are serialized.
+- Binary size is about 70 MB.
 
 ## 8. Data model
 
@@ -276,7 +281,7 @@ scomp [flags] [path]
 | `--no-cache` | false | Do not read or write the cache |
 | `--cache-ttl` | `24h` | Cache TTL |
 | `--offline` | false | Use osv-scanner's offline DB (does not send dependency info externally) |
-| `--scanner` | `exec` | `exec` / `lib` |
+| `--scanner` | `lib` | `lib` / `exec` |
 | `--json` | false | Do not start the TUI; print `[]Finding` as JSON to stdout (for tests / pipes) |
 | `--version` | | Print version |
 
@@ -292,7 +297,7 @@ scomp [flags] [path]
 │   │   ├── scanner.go       # interface
 │   │   ├── exec.go          # osv-scanner exec implementation
 │   │   ├── exec_parse.go    # JSON → model.Finding
-│   │   └── lib.go           # library implementation (M5)
+│   │   └── lib.go           # library implementation (M5, default)
 │   ├── model/               # Finding, Package, Severity
 │   └── tui/
 │       ├── model.go         # tea.Model
@@ -315,7 +320,7 @@ scomp [flags] [path]
 
 - When online, osv-scanner sends package names, versions, and ecosystems (and in some cases file hashes) to osv.dev. For private repositories, internal package names leave the network. Document this in the README and point to `--offline` as the workaround.
 - The exec implementation passes arguments as an array to `exec.CommandContext`. No shell is involved.
-- Show the path of the `osv-scanner` resolved by `exec.LookPath` in the header (so the user notices if an unintended binary runs).
+- Show the scanner in the header: the embedded osv-scanner version for lib, or the path resolved by `exec.LookPath` for exec (so the user notices if an unintended binary runs).
 - Treat vulnerability Details as externally sourced strings and strip terminal control sequences before display.
 - No credentials are handled.
 
