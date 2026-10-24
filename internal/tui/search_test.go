@@ -2,6 +2,7 @@ package tui
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jedipunkz/scomp/internal/model"
@@ -86,6 +87,94 @@ func TestSearchTiesKeepSortedOrder(t *testing.T) {
 	got := ids(fs, Search(fs, keysOf(fs), "pkg", Filter{}))
 	if want := []string{"A", "B"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestQueryFilters(t *testing.T) {
+	fs := sampleFindings()
+	SortFindings(fs)
+	keys := keysOf(fs)
+
+	tests := []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{name: "severity exact", query: "severity:high", want: []string{"GO-1", "GO-2"}},
+		{name: "severity shorthand", query: "sev:high", want: []string{"GO-1", "GO-2"}},
+		{name: "severity list", query: "severity:critical,medium", want: []string{"GHSA-1", "PYSEC-1"}},
+		{name: "severity at least", query: "severity:>=high", want: []string{"GHSA-1", "GO-1", "GO-2"}},
+		{name: "severity above", query: "severity:>high", want: []string{"GHSA-1"}},
+		{name: "severity at most", query: "severity:<=medium", want: []string{"PYSEC-1", "GO-4", "GO-3"}},
+		{name: "severity space separated", query: "severity: high", want: []string{"GO-1", "GO-2"}},
+		{name: "severity case-insensitive", query: "severity:CRITICAL", want: []string{"GHSA-1"}},
+		{name: "severity label alias", query: "severity:moderate", want: []string{"PYSEC-1"}},
+		{name: "ecosystem", query: "ecosystem:go", want: []string{"GO-1", "GO-2", "GO-4", "GO-3"}},
+		{name: "ecosystem shorthand", query: "eco:npm", want: []string{"GHSA-1"}},
+		{name: "package", query: "pkg:lodash", want: []string{"GHSA-1"}},
+		{name: "id", query: "id:GO-1", want: []string{"GO-1"}},
+		{name: "cve", query: "cve:CVE-2023-44487", want: []string{"GO-2"}},
+		{name: "cve has no match", query: "cve:GHSA", want: []string{}},
+		{name: "source", query: "source:go.mod", want: []string{}},
+		{name: "fixed true", query: "fixed:true", want: []string{"GO-1", "PYSEC-1"}},
+		{name: "fixed false", query: "fixed:false", want: []string{"GHSA-1", "GO-2", "GO-4", "GO-3"}},
+		{name: "combined", query: "eco:go severity:>=high fixed:true", want: []string{"GO-1"}},
+		{name: "combined with free text", query: "flood severity:high", want: []string{"GO-1"}},
+		{name: "unknown key falls back to free text", query: "foo:GO-1", want: []string{}},
+		{name: "invalid severity falls back to free text", query: "severity:hgih", want: []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ids(fs, Search(fs, keys, tt.query, Filter{}))
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestQueryMatchesFreeTextAndOffsets(t *testing.T) {
+	fs := sampleFindings()
+	SortFindings(fs)
+	keys := keysOf(fs)
+
+	// Free text must match the joined key, not only single fields.
+	got := ids(fs, Search(fs, keys, "pollution", Filter{}))
+	if want := []string{"GHSA-1"}; !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	// Matched offsets point at the term occurrences in the key.
+	rs := Search(fs, keys, "go", Filter{})
+	if len(rs) == 0 {
+		t.Fatal("no results")
+	}
+	for _, r := range rs {
+		lower := strings.ToLower(keys[r.Index])
+		for _, o := range r.Matched {
+			if !strings.HasPrefix(lower[o:], "go") {
+				t.Errorf("offset %d in %q is not a match", o, lower)
+			}
+		}
+	}
+}
+
+func TestParseQuery(t *testing.T) {
+	q := parseQuery("net sev:>=high fixed:true eco:go")
+	if len(q.terms) != 1 || q.terms[0] != "net" {
+		t.Errorf("terms = %v", q.terms)
+	}
+	if len(q.sev) != 1 || len(q.sev[0]) != 1 || q.sev[0][0] != (sevCond{op: ">=", val: model.SeverityHigh}) {
+		t.Errorf("sev = %v", q.sev)
+	}
+	if q.fixed == nil || !*q.fixed {
+		t.Errorf("fixed = %v", q.fixed)
+	}
+	if len(q.eco) != 1 || q.eco[0] != "go" {
+		t.Errorf("eco = %v", q.eco)
+	}
+	if q := parseQuery(""); len(q.terms) != 0 || q.fixed != nil {
+		t.Errorf("empty query = %+v", q)
 	}
 }
 

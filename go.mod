@@ -8,7 +8,6 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/google/osv-scanner/v2 v2.7.0
-	github.com/sahilm/fuzzy v0.1.3
 )
 
 require (

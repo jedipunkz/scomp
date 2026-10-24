@@ -5,12 +5,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sahilm/fuzzy"
-
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
-// Filter is applied before fuzzy matching.
+// Filter is applied before the query. It is driven by the
+// ctrl+s / ctrl+e / ctrl+f key bindings; the query can add more constraints.
 type Filter struct {
 	MinSeverity model.Severity // SeverityUnknown means all
 	Ecosystem   string         // "" means all
@@ -33,7 +32,7 @@ func (f Filter) match(x model.Finding) bool {
 // Result is a finding that passed the filter and query.
 type Result struct {
 	Index   int   // index into the sorted findings
-	Matched []int // byte offsets into the search key that matched the query
+	Matched []int // byte offsets into the search key that matched a free-text term
 }
 
 // SortFindings orders findings by severity desc, package name asc, ID asc.
@@ -75,35 +74,224 @@ func SearchKey(f model.Finding) (string, keyLayout) {
 	return b.String(), l
 }
 
-type keySource struct {
-	keys []string
-	idx  []int
+// sevCond is one severity comparison such as ">=high" or "=critical".
+type sevCond struct {
+	op  string // "=", ">=", ">", "<=", "<"; "" means "="
+	val model.Severity
 }
 
-func (s keySource) String(i int) string { return s.keys[s.idx[i]] }
-func (s keySource) Len() int            { return len(s.idx) }
+func (c sevCond) match(x model.Severity) bool {
+	switch c.op {
+	case ">=":
+		return x >= c.val
+	case ">":
+		return x > c.val
+	case "<=":
+		return x <= c.val
+	case "<":
+		return x < c.val
+	default:
+		return x == c.val
+	}
+}
 
-// Search filters findings (already sorted with SortFindings) and fuzzy-matches the rest.
-// With an empty query, results keep the sorted order. Otherwise they are ordered by
-// score desc; ties keep the sorted order.
-func Search(findings []model.Finding, keys []string, query string, f Filter) []Result {
-	idx := make([]int, 0, len(findings))
+var severityValues = map[string]model.Severity{
+	"unknown":  model.SeverityUnknown,
+	"low":      model.SeverityLow,
+	"medium":   model.SeverityMedium,
+	"moderate": model.SeverityMedium,
+	"high":     model.SeverityHigh,
+	"critical": model.SeverityCritical,
+}
+
+// parseSevConds parses a severity value: an optional comparison operator and a
+// comma-separated list of names ("high", ">=medium", "high,critical").
+func parseSevConds(v string) ([]sevCond, bool) {
+	var conds []sevCond
+	for _, part := range strings.Split(v, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		op, val := "", part
+		for _, o := range []string{">=", "<=", ">", "<", "="} {
+			if s, ok := strings.CutPrefix(part, o); ok {
+				op, val = o, s
+				break
+			}
+		}
+		sev, ok := severityValues[strings.ToLower(strings.TrimSpace(val))]
+		if !ok {
+			return nil, false
+		}
+		conds = append(conds, sevCond{op: cmp.Or(op, "="), val: sev})
+	}
+	return conds, len(conds) > 0
+}
+
+// query is a parsed search query. Field terms (key:value) and free-text terms
+// are ANDed; the values inside one field term are ORed.
+type query struct {
+	terms []string    // free text, matched against the lowercased search key
+	sev   [][]sevCond // severity constraints; OR within one, AND across
+	eco   []string    // ecosystem substrings
+	pkg   []string    // package name substrings
+	id    []string    // OSV ID substrings
+	cve   []string    // CVE ID substrings
+	src   []string    // lockfile source substrings
+	fixed *bool       // fixed:true / fixed:false
+}
+
+var fieldKeys = map[string]bool{
+	"severity": true, "sev": true,
+	"ecosystem": true, "eco": true,
+	"package": true, "pkg": true,
+	"id": true, "cve": true, "source": true, "fixed": true,
+}
+
+// parseQuery splits the query into field terms and free text. A field term is
+// "key:value"; the value may also be separated by a space ("severity: high").
+// Unknown keys and unparsable values fall back to free text.
+func parseQuery(s string) query {
+	var q query
+	fields := strings.Fields(s)
+	for i := 0; i < len(fields); i++ {
+		key, val, ok := strings.Cut(fields[i], ":")
+		k := strings.ToLower(key)
+		if !ok || !fieldKeys[k] {
+			q.terms = append(q.terms, strings.ToLower(fields[i]))
+			continue
+		}
+		raw := fields[i]
+		if val == "" && i+1 < len(fields) {
+			i++
+			val = fields[i]
+			raw += " " + val
+		}
+		if !q.add(k, val) {
+			q.terms = append(q.terms, strings.ToLower(raw))
+		}
+	}
+	return q
+}
+
+// add applies one key:value pair. It reports whether the value was valid.
+func (q *query) add(key, val string) bool {
+	switch key {
+	case "severity", "sev":
+		conds, ok := parseSevConds(val)
+		if !ok {
+			return false
+		}
+		q.sev = append(q.sev, conds)
+	case "ecosystem", "eco":
+		q.eco = append(q.eco, strings.ToLower(val))
+	case "package", "pkg":
+		q.pkg = append(q.pkg, strings.ToLower(val))
+	case "id":
+		q.id = append(q.id, strings.ToLower(val))
+	case "cve":
+		q.cve = append(q.cve, strings.ToLower(val))
+	case "source":
+		q.src = append(q.src, strings.ToLower(val))
+	case "fixed":
+		var b bool
+		switch strings.ToLower(val) {
+		case "true", "yes", "1":
+			b = true
+		case "false", "no", "0":
+			b = false
+		default:
+			return false
+		}
+		q.fixed = &b
+	}
+	return true
+}
+
+func containsFold(ss []string, sub string) bool {
+	for _, s := range ss {
+		if strings.Contains(strings.ToLower(s), sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// match reports whether the finding satisfies every constraint of the query.
+func (q query) match(f model.Finding, lowerKey string) bool {
+	for _, t := range q.terms {
+		if !strings.Contains(lowerKey, t) {
+			return false
+		}
+	}
+	for _, cs := range q.sev {
+		if !slices.ContainsFunc(cs, func(c sevCond) bool { return c.match(f.Severity) }) {
+			return false
+		}
+	}
+	for _, s := range q.eco {
+		if !strings.Contains(strings.ToLower(f.Package.Ecosystem), s) {
+			return false
+		}
+	}
+	for _, s := range q.pkg {
+		if !strings.Contains(strings.ToLower(f.Package.Name), s) {
+			return false
+		}
+	}
+	for _, s := range q.id {
+		if !strings.Contains(strings.ToLower(f.ID), s) {
+			return false
+		}
+	}
+	for _, s := range q.cve {
+		if !containsFold(f.CVEs, s) {
+			return false
+		}
+	}
+	for _, s := range q.src {
+		if !strings.Contains(strings.ToLower(f.Package.Source), s) {
+			return false
+		}
+	}
+	if q.fixed != nil && (len(f.FixedVersions) > 0) != *q.fixed {
+		return false
+	}
+	return true
+}
+
+// termOffsets returns the byte offsets of every occurrence of every term in
+// the (lowercased) key, used for highlighting in the list.
+func termOffsets(key string, terms []string) []int {
+	var off []int
+	for _, t := range terms {
+		for i := 0; ; {
+			j := strings.Index(key[i:], t)
+			if j < 0 {
+				break
+			}
+			off = append(off, i+j)
+			i += j + len(t)
+		}
+	}
+	return off
+}
+
+// Search filters findings (already sorted with SortFindings) by the Filter,
+// then by the parsed query. Results keep the sorted order.
+func Search(findings []model.Finding, keys []string, queryStr string, f Filter) []Result {
+	q := parseQuery(queryStr)
+	var out []Result
 	for i, x := range findings {
-		if f.match(x) {
-			idx = append(idx, i)
+		if !f.match(x) {
+			continue
 		}
-	}
-	if strings.TrimSpace(query) == "" {
-		out := make([]Result, len(idx))
-		for i, j := range idx {
-			out[i] = Result{Index: j}
+		lower := strings.ToLower(keys[i])
+		if !q.match(x, lower) {
+			continue
 		}
-		return out
-	}
-	matches := fuzzy.FindFrom(query, keySource{keys: keys, idx: idx})
-	out := make([]Result, len(matches))
-	for i, m := range matches {
-		out[i] = Result{Index: idx[m.Index], Matched: m.MatchedIndexes}
+		out = append(out, Result{Index: i, Matched: termOffsets(lower, q.terms)})
 	}
 	return out
 }
