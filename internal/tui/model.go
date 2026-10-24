@@ -134,7 +134,7 @@ type openedMsg struct{ err error }
 func New(ctx context.Context, cfg Config) Model {
 	ti := textinput.New()
 	ti.Prompt = "> "
-	ti.Placeholder = "search package, ID, CVE, summary"
+	ti.Placeholder = "filter: severity:high eco:go fixed, or free text"
 	focusCmd := ti.Focus()
 
 	m := Model{

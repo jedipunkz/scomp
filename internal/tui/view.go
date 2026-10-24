@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	headerLines   = 2 // title + query
-	chromeLines   = 3 // two separators + help
-	minPreviewCol = 80
-	helpText      = "↑↓ move  enter detail  shift+↑↓ scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
+	headerLines = 2 // title + query
+	chromeLines = 4 // top separator, detail separator, bottom separator, help
+	minListH    = 3
+	maxDetailH  = 14
+	helpText    = "↑↓ move  enter detail  shift+↑↓ scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
 )
 
 func (m Model) statusLine() string {
@@ -42,37 +43,39 @@ func (m Model) bodyHeight() int {
 	return max(1, h)
 }
 
-func (m Model) showSidePreview() bool {
-	return !m.detail && m.width >= minPreviewCol
-}
-
-func (m Model) listWidth() int {
-	if m.showSidePreview() {
-		return m.width * 55 / 100
+// detailHeight is the height of the bottom detail pane; 0 hides it.
+func (m Model) detailHeight() int {
+	if m.detail {
+		return 0
 	}
-	return m.width
+	h := m.bodyHeight()
+	dh := min(max(h*35/100, 4), maxDetailH)
+	if h-dh < minListH {
+		return 0
+	}
+	return dh
 }
 
 func (m Model) listHeight() int {
 	if m.detail {
 		return 0
 	}
-	return m.bodyHeight()
+	return m.bodyHeight() - m.detailHeight()
 }
 
 // layout sizes the input and preview to the current window.
 func (m *Model) layout() {
 	filters := m.filterLabel()
 	m.input.SetWidth(max(1, m.width-ansi.StringWidth(m.input.Prompt)-ansi.StringWidth(filters)-2))
-	switch {
-	case m.detail:
-		m.preview.SetWidth(max(1, m.width))
-	case m.showSidePreview():
-		m.preview.SetWidth(max(1, m.width-m.listWidth()-1))
-	default:
-		m.preview.SetWidth(1)
+	w, h := max(1, m.width), m.bodyHeight()
+	if !m.detail {
+		h = m.detailHeight()
+		if h == 0 {
+			w, h = 1, 1 // pane hidden
+		}
 	}
-	m.preview.SetHeight(m.bodyHeight())
+	m.preview.SetWidth(w)
+	m.preview.SetHeight(h)
 }
 
 func (m Model) filterLabel() string {
@@ -161,19 +164,13 @@ func (m Model) bodyLines(w int) []string {
 		return fitLines(m.preview.View(), w, h)
 	}
 
-	listW := m.listWidth()
-	list := m.listLines(listW, h)
-	if !m.showSidePreview() {
-		return list
+	dh := m.detailHeight()
+	out := m.listLines(w, h-dh)
+	if dh == 0 {
+		return out
 	}
-	prevW := w - listW - 1
-	prev := fitLines(m.preview.View(), prevW, h)
-	sep := styleDim.Render("│")
-	out := make([]string, h)
-	for i := range h {
-		out[i] = list[i] + sep + prev[i]
-	}
-	return out
+	out = append(out, styleDim.Render(strings.Repeat("─", w)))
+	return append(out, fitLines(m.preview.View(), w, dh)...)
 }
 
 func (m Model) listLines(w, h int) []string {

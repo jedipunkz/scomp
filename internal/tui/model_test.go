@@ -252,22 +252,46 @@ func TestOpenURL(t *testing.T) {
 	}
 }
 
-func TestDetailToggleAndNarrowLayout(t *testing.T) {
+func TestDetailPaneAndToggle(t *testing.T) {
 	m := newTestModel(Config{})
-	if !strings.Contains(m.View().Content, "│") {
-		t.Error("wide layout must show side preview")
+	v := m.View().Content
+	if !strings.Contains(v, "Ecosystem :") {
+		t.Error("bottom detail pane must show the selected finding")
 	}
-	m, _ = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
-	if strings.Contains(m.View().Content, "Ecosystem :") {
-		t.Error("narrow layout must hide preview")
+	if !strings.Contains(v, "GHSA-1") {
+		t.Error("detail pane must show the selected finding's ID")
 	}
 	m, _ = send(t, m, key("enter"))
 	if !m.detail || !strings.Contains(m.View().Content, "Ecosystem :") {
 		t.Error("enter must show full-screen detail")
 	}
 	m, _ = send(t, m, key("enter"))
-	if m.detail {
-		t.Error("enter must return to the list")
+	if m.detail || !strings.Contains(m.View().Content, "Ecosystem :") {
+		t.Error("enter must return to the list with the detail pane")
+	}
+
+	// Too short for a pane: list only.
+	m, _ = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 8})
+	if strings.Contains(m.View().Content, "Ecosystem :") {
+		t.Error("short terminal must hide the detail pane")
+	}
+
+	// Pane follows the selection.
+	m, _ = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30}, key("down"))
+	if !strings.Contains(m.View().Content, "GO-1") {
+		t.Error("detail pane must follow the selection")
+	}
+}
+
+func TestShortTerminalLayout(t *testing.T) {
+	m := newTestModel(Config{})
+	m, _ = send(t, m, tea.WindowSizeMsg{Width: 40, Height: 6})
+	lines := strings.Split(m.View().Content, "\n")
+	if len(lines) > 6 {
+		t.Fatalf("%d lines exceed height 6", len(lines))
+	}
+	if m.detailHeight() != 0 {
+		t.Errorf("detailHeight = %d, want 0", m.detailHeight())
 	}
 }
 
