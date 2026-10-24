@@ -1,5 +1,5 @@
 // Styles. Text colors follow the gruvbox (dark) palette; the terminal's
-// background is left untouched.
+// background is left untouched and no background colors are set on text.
 package tui
 
 import (
@@ -30,6 +30,10 @@ var (
 	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color(cRed))
 	styleMarker    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cOrange))
 
+	// pane title bars
+	stylePaneLabel = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	styleRule      = lipgloss.NewStyle().Foreground(lipgloss.Color(cGray))
+
 	// list columns
 	stylePackage    = lipgloss.NewStyle().Foreground(lipgloss.Color(cBlue))
 	stylePackageSel = stylePackage.Bold(true)
@@ -38,6 +42,7 @@ var (
 	styleID         = lipgloss.NewStyle().Foreground(lipgloss.Color(cPurple))
 	styleIDSel      = styleID.Bold(true)
 	styleSummary    = lipgloss.NewStyle().Foreground(lipgloss.Color(cGray))
+	styleSummarySel = styleSummary.Bold(true)
 
 	// detail pane
 	styleDetailID  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))

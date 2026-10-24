@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -15,11 +16,34 @@ import (
 
 const (
 	headerLines = 2 // title + query
-	chromeLines = 4 // top separator, detail separator, bottom separator, help
+	chromeLines = 1 // help; pane title bars are part of the body
 	minListH    = 3
 	maxDetailH  = 16
-	helpText    = "↑↓ move  enter detail  shift+↑↓ j/k scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
 )
+
+// helpKeyMap adapts the TUI's keys for the bubbles help component.
+type helpKeyMap struct{}
+
+func (helpKeyMap) ShortHelp() []key.Binding {
+	bind := func(keys, k, desc string) key.Binding {
+		return key.NewBinding(key.WithKeys(strings.Fields(keys)...), key.WithHelp(k, desc))
+	}
+	return []key.Binding{
+		bind("up down", "↑↓", "move"),
+		bind("j k", "j/k", "scroll"),
+		bind("enter", "enter", "detail"),
+		bind("ctrl+o", "ctrl+o", "open"),
+		bind("ctrl+s", "ctrl+s", "severity"),
+		bind("ctrl+e", "ctrl+e", "ecosystem"),
+		bind("ctrl+f", "ctrl+f", "fixed"),
+		bind("ctrl+r", "ctrl+r", "rescan"),
+		bind("esc", "esc", "quit"),
+	}
+}
+
+func (h helpKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{h.ShortHelp()}
+}
 
 func (m Model) statusLine() string {
 	if m.scanErr != nil {
@@ -50,7 +74,7 @@ func (m Model) detailHeight() int {
 	}
 	h := m.bodyHeight()
 	dh := min(max(h*55/100, 4), maxDetailH)
-	if h-dh < minListH {
+	if h-dh-2 < minListH { // two title bars
 		return 0
 	}
 	return dh
@@ -60,19 +84,26 @@ func (m Model) listHeight() int {
 	if m.detail {
 		return 0
 	}
-	return m.bodyHeight() - m.detailHeight()
+	dh := m.detailHeight()
+	if dh == 0 {
+		return m.bodyHeight()
+	}
+	return m.bodyHeight() - dh - 2 // two title bars
 }
 
-// layout sizes the input and preview to the current window.
+// layout sizes the input, help and preview to the current window.
 func (m *Model) layout() {
 	filters := m.filterLabel()
 	m.input.SetWidth(max(1, m.width-ansi.StringWidth(m.input.Prompt)-ansi.StringWidth(filters)-2))
+	m.help.SetWidth(max(1, m.width))
 	w, h := max(1, m.width), m.bodyHeight()
 	if !m.detail {
 		h = m.detailHeight()
 		if h == 0 {
 			w, h = 1, 1 // pane hidden
 		}
+	} else {
+		h-- // detail title bar
 	}
 	m.preview.SetWidth(w)
 	m.preview.SetHeight(h)
@@ -96,19 +127,22 @@ func (m Model) View() tea.View {
 	var lines []string
 	lines = append(lines, fit(m.headerLine(), w))
 	lines = append(lines, fit(spread(m.input.View(), styleDim.Render(m.filterLabel()), w), w))
-	lines = append(lines, styleDim.Render(strings.Repeat("─", w)))
 	lines = append(lines, m.bodyLines(w)...)
-	lines = append(lines, styleDim.Render(strings.Repeat("─", w)))
 	if s := m.statusLine(); s != "" {
 		lines = append(lines, fit(s, w))
 	}
-	lines = append(lines, fit(styleDim.Render(helpText), w))
+	lines = append(lines, fit(m.help.View(helpKeyMap{}), w))
 	if m.height > 0 && len(lines) > m.height {
 		lines = lines[:m.height]
 	}
 
 	v := tea.NewView(strings.Join(lines, "\n"))
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	v.WindowTitle = "scomp"
+	if m.cfg.Title != "" {
+		v.WindowTitle += " · " + m.cfg.Title
+	}
 	return v
 }
 
@@ -168,16 +202,32 @@ func ago(d time.Duration) string {
 func (m Model) bodyLines(w int) []string {
 	h := m.bodyHeight()
 	if m.detail {
-		return fitLines(m.preview.View(), w, h)
+		out := []string{m.detailTitle(w)}
+		return append(out, fitLines(m.preview.View(), w, h-1)...)
 	}
 
 	dh := m.detailHeight()
-	out := m.listLines(w, h-dh)
+	out := []string{m.listTitle(w)}
+	out = append(out, m.listLines(w, m.listHeight())...)
 	if dh == 0 {
 		return out
 	}
-	out = append(out, styleDim.Render(strings.Repeat("─", w)))
+	out = append(out, m.detailTitle(w))
 	return append(out, fitLines(m.preview.View(), w, dh)...)
+}
+
+// rule renders a pane title bar: a label followed by a rule filling the width.
+func rule(w int, label string) string {
+	s := stylePaneLabel.Render(" " + label + " ")
+	return s + styleRule.Render(strings.Repeat("─", max(0, w-ansi.StringWidth(s))))
+}
+
+func (m Model) listTitle(w int) string {
+	return rule(w, fmt.Sprintf("Findings %d/%d", len(m.results), len(m.findings)))
+}
+
+func (m Model) detailTitle(w int) string {
+	return rule(w, "Detail")
 }
 
 func (m Model) listLines(w, h int) []string {
@@ -212,18 +262,19 @@ func (m Model) listLines(w, h int) []string {
 			matched[o] = true
 		}
 		nameSt, verSt, idSt := stylePackage, styleVersion, styleID
+		sumSt := styleSummary
 		marker := "  "
 		if i == m.cursor {
 			marker = styleMarker.Render("▶ ")
-			nameSt, verSt, idSt = stylePackageSel, styleVersionSel, styleIDSel
+			nameSt, verSt, idSt, sumSt = stylePackageSel, styleVersionSel, styleIDSel, styleSummarySel
 		}
 		sev := severityStyles[f.Severity].Render(pad(f.Severity.Short(), 4))
 		cols := []string{
 			marker + sev,
-			pad(ansi.Truncate(highlight(f.Package.Name, lay.name, matched, nameSt), nameW, "…"), nameW),
+			pad(ansi.Truncate(highlight(f.Package.Name, lay.name, matched, nameSt, styleHighlight), nameW, "…"), nameW),
 			pad(ansi.Truncate(verSt.Render(f.Package.Version), verW, "…"), verW),
-			pad(ansi.Truncate(highlight(f.ID, lay.id, matched, idSt), idW, "…"), idW),
-			highlight(f.Summary, lay.summary, matched, styleSummary),
+			pad(ansi.Truncate(highlight(f.ID, lay.id, matched, idSt, styleHighlight), idW, "…"), idW),
+			highlight(f.Summary, lay.summary, matched, sumSt, styleHighlight),
 		}
 		lines[row] = fit(strings.Join(cols, "  "), w)
 	}
@@ -252,7 +303,7 @@ func (m Model) emptyMessage() []string {
 
 // highlight renders s (which starts at byte offset start in the search key)
 // with the matched key offsets highlighted.
-func highlight(s string, start int, matched map[int]bool, base lipgloss.Style) string {
+func highlight(s string, start int, matched map[int]bool, base, hl lipgloss.Style) string {
 	if len(matched) == 0 {
 		return base.Render(s)
 	}
@@ -264,7 +315,7 @@ func highlight(s string, start int, matched map[int]bool, base lipgloss.Style) s
 			return
 		}
 		if runHL {
-			b.WriteString(styleHighlight.Render(run.String()))
+			b.WriteString(hl.Render(run.String()))
 		} else {
 			b.WriteString(base.Render(run.String()))
 		}

@@ -13,7 +13,7 @@ import (
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
-func key(s string) tea.KeyPressMsg {
+func press(s string) tea.KeyPressMsg {
 	switch s {
 	case "up":
 		return tea.KeyPressMsg{Code: tea.KeyUp}
@@ -46,7 +46,7 @@ func send(t *testing.T, m Model, msgs ...tea.Msg) (Model, tea.Cmd) {
 func typeText(t *testing.T, m Model, s string) Model {
 	t.Helper()
 	for _, r := range s {
-		m, _ = send(t, m, key(string(r)))
+		m, _ = send(t, m, press(string(r)))
 	}
 	return m
 }
@@ -70,9 +70,9 @@ func selectedID(m Model) string {
 
 func TestKeyStrings(t *testing.T) {
 	// Guard the key names handleKey switches on.
-	for _, s := range []string{"up", "down", "enter", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k"} {
-		if got := key(s).String(); got != s {
-			t.Errorf("key(%q).String() = %q", s, got)
+	for _, s := range []string{"up", "down", "enter", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k", "q"} {
+		if got := press(s).String(); got != s {
+			t.Errorf("press(%q).String() = %q", s, got)
 		}
 	}
 }
@@ -82,15 +82,15 @@ func TestNavigationAndQuery(t *testing.T) {
 	if got := selectedID(m); got != "GHSA-1" {
 		t.Fatalf("initial selection = %s, want GHSA-1", got)
 	}
-	m, _ = send(t, m, key("down"), key("down"))
+	m, _ = send(t, m, press("down"), press("down"))
 	if got := selectedID(m); got != "GO-2" {
 		t.Errorf("after 2 down = %s, want GO-2", got)
 	}
-	m, _ = send(t, m, key("up"), key("ctrl+p"), key("ctrl+p"))
+	m, _ = send(t, m, press("up"), press("ctrl+p"), press("ctrl+p"))
 	if got := selectedID(m); got != "GHSA-1" {
 		t.Errorf("cursor must stop at top, got %s", got)
 	}
-	m, _ = send(t, m, key("ctrl+n"))
+	m, _ = send(t, m, press("ctrl+n"))
 	if got := selectedID(m); got != "GO-1" {
 		t.Errorf("ctrl+n = %s, want GO-1", got)
 	}
@@ -100,7 +100,7 @@ func TestNavigationAndQuery(t *testing.T) {
 	if m.input.Value() != "q" {
 		t.Fatalf("query = %q, want q", m.input.Value())
 	}
-	m, _ = send(t, m, key("backspace"))
+	m, _ = send(t, m, press("backspace"))
 	m = typeText(t, m, "lodash")
 	if len(m.results) != 1 || selectedID(m) != "GHSA-1" {
 		t.Errorf("query lodash: results=%d selected=%s", len(m.results), selectedID(m))
@@ -129,7 +129,7 @@ func TestFilters(t *testing.T) {
 	}
 	// ecosystems are sorted: Go, PyPI, npm
 	for i, s := range steps {
-		m, _ = send(t, m, key(s.key))
+		m, _ = send(t, m, press(s.key))
 		if len(m.results) != s.want {
 			t.Errorf("step %d (%s, %s): %d results, want %d", i, s.key, m.filterLabel(), len(m.results), s.want)
 		}
@@ -138,8 +138,8 @@ func TestFilters(t *testing.T) {
 
 func TestFilterKeepsSelection(t *testing.T) {
 	m := newTestModel(Config{})
-	m, _ = send(t, m, key("down"))   // GO-1 (high)
-	m, _ = send(t, m, key("ctrl+e")) // Go
+	m, _ = send(t, m, press("down"))   // GO-1 (high)
+	m, _ = send(t, m, press("ctrl+e")) // Go
 	if got := selectedID(m); got != "GO-1" {
 		t.Errorf("selection after filter = %s, want GO-1", got)
 	}
@@ -156,20 +156,51 @@ func TestDetailScrollKeys(t *testing.T) {
 	if m.preview.YOffset() != 0 {
 		t.Fatalf("initial YOffset = %d", m.preview.YOffset())
 	}
-	m, _ = send(t, m, key("j"))
+	m, _ = send(t, m, press("j"))
 	if m.preview.YOffset() != 1 {
 		t.Errorf("j: YOffset = %d, want 1", m.preview.YOffset())
 	}
-	m, _ = send(t, m, key("k"))
+	m, _ = send(t, m, press("k"))
 	if m.preview.YOffset() != 0 {
 		t.Errorf("k: YOffset = %d, want 0", m.preview.YOffset())
+	}
+}
+
+func TestDetailBackKeys(t *testing.T) {
+	m := newTestModel(Config{})
+	m, _ = send(t, m, press("enter"))
+	if !m.detail {
+		t.Fatal("enter must show detail")
+	}
+	m, cmd := send(t, m, press("q"))
+	if m.detail {
+		t.Error("q must return to the list")
+	}
+	if cmd != nil {
+		t.Error("q must not quit from the detail view")
+	}
+	m, _ = send(t, m, press("enter"))
+	m, _ = send(t, m, press("esc"))
+	if m.detail {
+		t.Error("esc must return to the list")
+	}
+	_, cmd = send(t, m, press("esc"))
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Error("esc on the list must quit")
+	}
+
+	// On the list, q goes into the query instead.
+	m = newTestModel(Config{})
+	m, _ = send(t, m, press("q"))
+	if m.input.Value() != "q" || m.detail {
+		t.Errorf("query = %q, detail = %v; want q, false", m.input.Value(), m.detail)
 	}
 }
 
 func TestQuitKeys(t *testing.T) {
 	for _, k := range []string{"esc", "ctrl+c"} {
 		m := newTestModel(Config{})
-		_, cmd := send(t, m, key(k))
+		_, cmd := send(t, m, press(k))
 		if cmd == nil {
 			t.Fatalf("%s: no cmd", k)
 		}
@@ -197,7 +228,7 @@ func TestScanLifecycle(t *testing.T) {
 		t.Error("view must show scanning state")
 	}
 	// ctrl+r while scanning must not start a second scan.
-	if _, c := send(t, m, key("ctrl+r")); c != nil {
+	if _, c := send(t, m, press("ctrl+r")); c != nil {
 		t.Error("ctrl+r during scan must be ignored")
 	}
 
@@ -223,7 +254,7 @@ func TestScanErrorKeepsCachedList(t *testing.T) {
 	if !strings.Contains(v, "error: boom") {
 		t.Error("error must be shown in status line")
 	}
-	m, _ = send(t, m, key("enter"))
+	m, _ = send(t, m, press("enter"))
 	if !strings.Contains(m.View().Content, "full stderr text") {
 		t.Error("detail view must show full stderr")
 	}
@@ -256,7 +287,7 @@ func TestEmptyStates(t *testing.T) {
 func TestOpenURL(t *testing.T) {
 	var opened string
 	m := newTestModel(Config{OpenURL: func(u string) error { opened = u; return nil }})
-	_, cmd := send(t, m, key("ctrl+o"))
+	_, cmd := send(t, m, press("ctrl+o"))
 	if cmd == nil {
 		t.Fatal("ctrl+o returned no cmd")
 	}
@@ -266,7 +297,7 @@ func TestOpenURL(t *testing.T) {
 	}
 
 	m = newTestModel(Config{OpenURL: func(string) error { return errors.New("no browser") }})
-	_, cmd = send(t, m, key("ctrl+o"))
+	_, cmd = send(t, m, press("ctrl+o"))
 	m, _ = send(t, m, cmd())
 	if !strings.Contains(m.View().Content, "no browser") {
 		t.Error("open error must be shown")
@@ -282,11 +313,11 @@ func TestDetailPaneAndToggle(t *testing.T) {
 	if !strings.Contains(v, "GHSA-1") {
 		t.Error("detail pane must show the selected finding's ID")
 	}
-	m, _ = send(t, m, key("enter"))
+	m, _ = send(t, m, press("enter"))
 	if !m.detail || !strings.Contains(m.View().Content, "Ecosystem :") {
 		t.Error("enter must show full-screen detail")
 	}
-	m, _ = send(t, m, key("enter"))
+	m, _ = send(t, m, press("enter"))
 	if m.detail || !strings.Contains(m.View().Content, "Ecosystem :") {
 		t.Error("enter must return to the list with the detail pane")
 	}
@@ -298,9 +329,20 @@ func TestDetailPaneAndToggle(t *testing.T) {
 	}
 
 	// Pane follows the selection.
-	m, _ = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30}, key("down"))
+	m, _ = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30}, press("down"))
 	if !strings.Contains(m.View().Content, "GO-1") {
 		t.Error("detail pane must follow the selection")
+	}
+}
+
+func TestPaneTitles(t *testing.T) {
+	m := newTestModel(Config{})
+	v := m.View().Content
+	if !strings.Contains(v, "Findings 6/6") || !strings.Contains(v, " Detail ") {
+		t.Error("pane title bars must be shown")
+	}
+	if !strings.Contains(v, "↑↓") || !strings.Contains(v, "rescan") {
+		t.Error("help bar must show the key bindings")
 	}
 }
 

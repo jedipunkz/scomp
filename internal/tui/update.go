@@ -40,6 +40,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
 
+	case tea.MouseWheelMsg:
+		var cmd tea.Cmd
+		m.preview, cmd = m.preview.Update(msg)
+		return m, cmd
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -86,10 +91,18 @@ func (m Model) handleScanDone(msg scanDoneMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+c":
+		if m.detail {
+			return m.backToList()
+		}
 		if m.cancelScan != nil {
 			m.cancelScan()
 		}
 		return m, tea.Quit
+	case "q":
+		if m.detail {
+			return m.backToList()
+		}
+		return m.editInput(msg)
 	case "up", "ctrl+p":
 		m.moveCursor(-1)
 		return m, nil
@@ -134,6 +147,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.startScan()
 	}
 
+	return m.editInput(msg)
+}
+
+// editInput routes the key to the search input and refreshes on change.
+func (m Model) editInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	before := m.input.Value()
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
@@ -141,6 +159,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.refresh()
 	}
 	return m, cmd
+}
+
+// backToList leaves the full-screen detail view.
+func (m Model) backToList() (tea.Model, tea.Cmd) {
+	m.detail = false
+	m.clampOffset()
+	m.updatePreview()
+	return m, nil
 }
 
 func (m Model) openSelected() tea.Cmd {
