@@ -49,7 +49,7 @@ func (m Model) detailHeight() int {
 		return 0
 	}
 	h := m.bodyHeight()
-	dh := min(max(h*45/100, 4), maxDetailH)
+	dh := min(max(h*55/100, 4), maxDetailH)
 	if h-dh < minListH {
 		return 0
 	}
