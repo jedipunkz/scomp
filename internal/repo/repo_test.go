@@ -12,7 +12,7 @@ import (
 func write(t *testing.T, root, rel string) {
 	t.Helper()
 	p := filepath.Join(root, rel)
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(p, []byte(rel), 0o600); err != nil {
@@ -63,7 +63,7 @@ func TestFindRoot(t *testing.T) {
 		t.Fatalf("git init: %v %s", err, out)
 	}
 	sub := filepath.Join(dir, "a", "b")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
+	if err := os.MkdirAll(sub, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	root, inGit, err = FindRoot(context.Background(), sub)

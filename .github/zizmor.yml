@@ -1,0 +1,11 @@
+# zizmor ignores must carry a reason and a tracking issue.
+rules:
+  dangerous-triggers:
+    ignore:
+      # dependabot-auto-merge.yml needs pull_request_target because Dependabot
+      # PRs get a read-only GITHUB_TOKEN on the pull_request event, so the
+      # auto-merge step cannot enable auto-merge there. Spoofing is mitigated
+      # by checking github.event.pull_request.user.login, the non-spoofable
+      # field, instead of github.actor.
+      # Tracking issue: #5
+      - dependabot-auto-merge.yml

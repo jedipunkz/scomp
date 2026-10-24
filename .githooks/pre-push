@@ -1,0 +1,6 @@
+#!/bin/sh
+# Runs the same checks as CI on every push. Do not bypass this hook with
+# --no-verify (see CLAUDE.md); fix the failures instead.
+set -e
+echo "pre-push: make check"
+make check
