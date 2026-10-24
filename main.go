@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -60,7 +61,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.BoolVar(&o.noCache, "no-cache", false, "do not read or write the cache")
 	fs.DurationVar(&o.cacheTTL, "cache-ttl", 24*time.Hour, "cache TTL")
 	fs.BoolVar(&o.offline, "offline", false, "use osv-scanner's offline vulnerability DB (dependency info is not sent externally)")
-	fs.StringVar(&o.scanner, "scanner", "exec", "scanner implementation: exec | lib")
+	fs.StringVar(&o.scanner, "scanner", "lib", "scanner implementation: lib (embedded osv-scanner) | exec (osv-scanner in PATH)")
 	fs.BoolVar(&o.json, "json", false, "print findings as JSON to stdout instead of starting the TUI")
 	fs.BoolVar(&o.version, "version", false, "print version")
 	if err := fs.Parse(args); err != nil {
@@ -185,9 +186,9 @@ func newScanner(o options) (scanner.Scanner, string, error) {
 		}
 		return e, e.Path, nil
 	case "lib":
-		return nil, "", scanner.ErrLibNotImplemented
+		return scanner.Lib{Offline: o.offline}, "osv-scanner " + embeddedOSVVersion() + " (embedded)", nil
 	default:
-		return nil, "", fmt.Errorf("unknown --scanner %q (want exec or lib)", o.scanner)
+		return nil, "", fmt.Errorf("unknown --scanner %q (want lib or exec)", o.scanner)
 	}
 }
 
@@ -201,9 +202,9 @@ func runJSON(ctx context.Context, sc scanner.Scanner, root string, cached *cache
 		case errors.Is(err, scanner.ErrNoPackages):
 			fmt.Fprintln(stderr, "scomp:", err)
 		case err != nil:
-			var ee *scanner.ExecError
-			if errors.As(err, &ee) && ee.Stderr != "" {
-				fmt.Fprint(stderr, ee.Stderr)
+			var d interface{ Details() string }
+			if errors.As(err, &d) && d.Details() != "" {
+				fmt.Fprintln(stderr, strings.TrimRight(d.Details(), "\n"))
 			}
 			return err
 		default:
@@ -248,4 +249,16 @@ func versionString() string {
 		return bi.Main.Version
 	}
 	return "dev"
+}
+
+// embeddedOSVVersion returns the version of the linked osv-scanner module.
+func embeddedOSVVersion() string {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, d := range bi.Deps {
+			if d.Path == "github.com/google/osv-scanner/v2" {
+				return d.Version
+			}
+		}
+	}
+	return "unknown"
 }
