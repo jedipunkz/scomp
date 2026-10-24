@@ -18,7 +18,7 @@ const (
 	headerLines = 2 // title + query
 	chromeLines = 1 // help; pane title bars are part of the body
 	minListH    = 3
-	maxDetailH  = 16
+	minDetailH  = 4
 )
 
 // helpKeyMap adapts the TUI's keys for the bubbles help component.
@@ -72,9 +72,11 @@ func (m Model) detailHeight() int {
 	if m.detail {
 		return 0
 	}
-	h := m.bodyHeight()
-	dh := min(max(h*55/100, 4), maxDetailH)
-	if h-dh-2 < minListH { // two title bars
+	// The list keeps about a third of the window; the detail pane takes the
+	// rest, minus the two title bars between the panes.
+	lh := max(minListH, m.height/3)
+	dh := m.bodyHeight() - lh - 2
+	if dh < minDetailH {
 		return 0
 	}
 	return dh
