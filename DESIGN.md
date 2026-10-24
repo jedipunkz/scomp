@@ -228,7 +228,7 @@ Listing is used only for cache key computation. The actual dependency extraction
 
 - Top: search input (`bubbles/textinput`), styled prompt and cursor. Focus is on the input from startup, and typed characters always go into the query.
 - Above: Finding list. Free-text matches are highlighted. The selected row is highlighted with the gruvbox `bg1` background across its full width.
-- Below: detail pane of the selected Finding (`bubbles/viewport`), about 55% of the body height. Scrolled with `shift+↑` `shift+↓` `j` `k` and the mouse wheel.
+- Below: detail pane of the selected Finding (`bubbles/viewport`). The list keeps about a third of the window height; the detail pane takes the rest. Scrolled with `shift+↑` `shift+↓` `j` `k` and the mouse wheel.
 - The list and detail panes have title bars (`Findings n/m`, `Detail`) rendered with lipgloss; the help bar uses `bubbles/help` with gruvbox styles.
 - `enter` toggles a full-screen detail view. On very short terminals where the list would drop below 3 rows, the pane is hidden and `enter` is the only way to see the detail.
 
