@@ -53,7 +53,7 @@ Flags must come before `path`.
 | `ctrl+e` | Cycle ecosystem filter |
 | `ctrl+f` | Toggle showing only findings with a fixed version |
 | `ctrl+r` | Rescan ignoring the cache |
-| `esc` / `ctrl+c` | Quit |
+| `esc` / `ctrl+c` | Quit. In the detail view, `esc` / `q` return to the list |
 
 The query is a filter expression. Field terms constrain the result and free text matches package name, ecosystem, OSV ID, CVE IDs and summary (case-insensitive substring):
 

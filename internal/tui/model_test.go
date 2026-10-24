@@ -70,7 +70,7 @@ func selectedID(m Model) string {
 
 func TestKeyStrings(t *testing.T) {
 	// Guard the key names handleKey switches on.
-	for _, s := range []string{"up", "down", "enter", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k"} {
+	for _, s := range []string{"up", "down", "enter", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k", "q"} {
 		if got := press(s).String(); got != s {
 			t.Errorf("press(%q).String() = %q", s, got)
 		}
@@ -163,6 +163,37 @@ func TestDetailScrollKeys(t *testing.T) {
 	m, _ = send(t, m, press("k"))
 	if m.preview.YOffset() != 0 {
 		t.Errorf("k: YOffset = %d, want 0", m.preview.YOffset())
+	}
+}
+
+func TestDetailBackKeys(t *testing.T) {
+	m := newTestModel(Config{})
+	m, _ = send(t, m, press("enter"))
+	if !m.detail {
+		t.Fatal("enter must show detail")
+	}
+	m, cmd := send(t, m, press("q"))
+	if m.detail {
+		t.Error("q must return to the list")
+	}
+	if cmd != nil {
+		t.Error("q must not quit from the detail view")
+	}
+	m, _ = send(t, m, press("enter"))
+	m, _ = send(t, m, press("esc"))
+	if m.detail {
+		t.Error("esc must return to the list")
+	}
+	_, cmd = send(t, m, press("esc"))
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Error("esc on the list must quit")
+	}
+
+	// On the list, q goes into the query instead.
+	m = newTestModel(Config{})
+	m, _ = send(t, m, press("q"))
+	if m.input.Value() != "q" || m.detail {
+		t.Errorf("query = %q, detail = %v; want q, false", m.input.Value(), m.detail)
 	}
 }
 

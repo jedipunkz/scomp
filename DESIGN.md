@@ -246,9 +246,9 @@ Listing is used only for cache key computation. The actual dependency extraction
 | `ctrl+e` | Cycle ecosystem filter (all → detected ecosystems in order) |
 | `ctrl+f` | Toggle showing only findings with a fixed version |
 | `ctrl+r` | Rescan ignoring the cache |
-| `esc` / `ctrl+c` | Quit |
+| `esc` / `ctrl+c` | Quit. In the detail view, `esc` / `q` return to the list |
 
-Why `q` does not quit: typed characters always go into the query by design. Exception: `j` / `k` are reserved for scrolling the detail pane and never reach the query.
+Why `q` does not quit: typed characters always go into the query by design. Exceptions: `j` / `k` are reserved for scrolling the detail pane and never reach the query; in the detail view, `q` returns to the list.
 
 ### 10.3 Query filtering
 
