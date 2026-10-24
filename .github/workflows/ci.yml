@@ -87,9 +87,12 @@ jobs:
         run: |
           base=$(go tool cover -func="$RUNNER_TEMP/coverage-base.out" | awk '/^total:/ { print substr($3, 1, length($3)-1) }')
           head=$(go tool cover -func="$RUNNER_TEMP/coverage-head.out" | awk '/^total:/ { print substr($3, 1, length($3)-1) }')
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-          echo "delta=$(awk -v h="$head" -v b="$base" 'BEGIN { printf "%.1f", h - b }')" >> "$GITHUB_OUTPUT"
+          delta=$(awk -v h="$head" -v b="$base" 'BEGIN { printf "%.1f", h - b }')
+          {
+            echo "base=$base"
+            echo "head=$head"
+            echo "delta=$delta"
+          } >> "$GITHUB_OUTPUT"
       - name: Fail when total coverage drops
         env:
           BASE: ${{ steps.totals.outputs.base }}
