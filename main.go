@@ -100,7 +100,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%s is not a directory", root)
 	}
 	if !inGit {
-		_, _ = fmt.Fprintf(stderr, "warning: %s is not in a git repository; scanning it as the root\n", root)
+		_, _ = fmt.Fprintf(stderr, "warning: %s is not in a git repository; scanning it as the root\n", model.Sanitize(root))
 	}
 
 	sc, scannerPath, err := newScanner(o)
@@ -117,10 +117,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	var key string
 	if !o.noCache {
 		if store, err = cache.DefaultStore(); err != nil {
-			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", model.Sanitize(err.Error()))
 			store = nil
 		} else if key, err = cache.Key(root, lockfiles); err != nil {
-			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", model.Sanitize(err.Error()))
 			store = nil
 		}
 	}
@@ -132,7 +132,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		switch {
 		case err != nil:
 			notice = "cache: " + err.Error()
-			_, _ = fmt.Fprintln(stderr, "warning:", notice)
+			_, _ = fmt.Fprintln(stderr, "warning:", model.Sanitize(notice))
 		case ok:
 			cached = &e
 		}
@@ -200,17 +200,17 @@ func runJSON(ctx context.Context, sc scanner.Scanner, root string, cached *cache
 		fs, err := sc.Scan(ctx, root)
 		switch {
 		case errors.Is(err, scanner.ErrNoPackages):
-			_, _ = fmt.Fprintln(stderr, "scomp:", err)
+			_, _ = fmt.Fprintln(stderr, "scomp:", model.Sanitize(err.Error()))
 		case err != nil:
 			var d interface{ Details() string }
 			if errors.As(err, &d) && d.Details() != "" {
-				_, _ = fmt.Fprintln(stderr, strings.TrimRight(d.Details(), "\n"))
+				_, _ = fmt.Fprintln(stderr, strings.TrimRight(model.Sanitize(d.Details()), "\n"))
 			}
 			return err
 		default:
 			findings = fs
 			if err := save(fs); err != nil {
-				_, _ = fmt.Fprintln(stderr, "warning: cache write failed:", err)
+				_, _ = fmt.Fprintln(stderr, "warning: cache write failed:", model.Sanitize(err.Error()))
 			}
 		}
 	}

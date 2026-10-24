@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/spinner"
@@ -14,8 +13,6 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
-
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
@@ -209,7 +206,7 @@ func (m *Model) startScan() tea.Cmd {
 func (m *Model) setFindings(fs []model.Finding) {
 	m.findings = make([]model.Finding, len(fs))
 	for i, f := range fs {
-		m.findings[i] = sanitizeFinding(f)
+		m.findings[i] = model.SanitizeFinding(f)
 	}
 	SortFindings(m.findings)
 	m.keys = make([]string, len(m.findings))
@@ -322,48 +319,4 @@ func (m *Model) updatePreview() {
 	if scrollReset {
 		m.preview.GotoTop()
 	}
-}
-
-// sanitizeFinding strips terminal control sequences from externally sourced strings.
-func sanitizeFinding(f model.Finding) model.Finding {
-	f.ID = sanitize(f.ID)
-	f.Summary = sanitize(f.Summary)
-	f.Details = sanitize(f.Details)
-	f.Package.Name = sanitize(f.Package.Name)
-	f.Package.Version = sanitize(f.Package.Version)
-	f.Package.Ecosystem = sanitize(f.Package.Ecosystem)
-	f.Package.Source = sanitize(f.Package.Source)
-	f.Aliases = sanitizeAll(f.Aliases)
-	f.CVEs = sanitizeAll(f.CVEs)
-	f.FixedVersions = sanitizeAll(f.FixedVersions)
-	f.References = sanitizeAll(f.References)
-	return f
-}
-
-func sanitizeAll(ss []string) []string {
-	if ss == nil {
-		return nil
-	}
-	out := make([]string, len(ss))
-	for i, s := range ss {
-		out[i] = sanitize(s)
-	}
-	return out
-}
-
-// sanitize removes ANSI escape sequences and other control characters,
-// keeping newlines and converting tabs to spaces.
-func sanitize(s string) string {
-	s = ansi.Strip(s)
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\n':
-			return r
-		case r == '\t':
-			return ' '
-		case unicode.IsControl(r), r == ' ', r == ' ':
-			return -1
-		}
-		return r
-	}, s)
 }

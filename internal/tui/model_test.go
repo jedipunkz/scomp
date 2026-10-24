@@ -374,13 +374,6 @@ func TestViewFitsWindow(t *testing.T) {
 	}
 }
 
-func TestSanitize(t *testing.T) {
-	in := "ok\x1b[31mred\x1b[0m\x1b]0;title\x07\r\bend\ttab\nline"
-	if got, want := sanitize(in), "okredend tab\nline"; got != want {
-		t.Errorf("sanitize = %q, want %q", got, want)
-	}
-}
-
 func lipglossWidth(s string) int { return ansi.StringWidth(s) }
 
 func TestHeaderKeepsStatusVisible(t *testing.T) {
