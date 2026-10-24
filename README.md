@@ -1,6 +1,6 @@
 # scomp
 
-scomp lists known vulnerabilities in the dependencies of the current Git repository and lets you browse them with an fzf-style fuzzy finder.
+scomp lists known vulnerabilities in the dependencies of the current Git repository and lets you browse and filter them.
 
 It reads the repository's lockfiles with [osv-scanner](https://github.com/google/osv-scanner), which is embedded as a library, and shows one row per package × vulnerability (OSV ID, with CVE IDs alongside). No separate osv-scanner install is needed.
 
@@ -46,7 +46,7 @@ Flags must come before `path`.
 | `↑` `↓` / `ctrl+p` `ctrl+n` | Move selection |
 | `pgup` `pgdown` | Page through the list |
 | `enter` | Show full-screen detail / go back |
-| `shift+↑` `shift+↓` | Scroll preview |
+| `shift+↑` `shift+↓` | Scroll the detail pane |
 | `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
 | `ctrl+s` | Cycle severity filter (all → critical → high+ → medium+) |
 | `ctrl+e` | Cycle ecosystem filter |
@@ -54,7 +54,21 @@ Flags must come before `path`.
 | `ctrl+r` | Rescan ignoring the cache |
 | `esc` / `ctrl+c` | Quit |
 
-The query matches package name, ecosystem, OSV ID, CVE IDs and summary.
+The query is a filter expression. Field terms constrain the result and free text matches package name, ecosystem, OSV ID, CVE IDs and summary (case-insensitive substring):
+
+```
+severity:high              exact severity (also sev:)
+severity:>=high            comparison: > >= < <= = and a comma list (severity:high,critical)
+ecosystem:go               ecosystem substring (also eco:)
+package:x/net              package name substring (also pkg:)
+id:GO-2024                 OSV ID substring
+cve:CVE-2023               CVE ID substring
+source:go.mod              lockfile path substring
+fixed:true / fixed:false   only findings with / without a fixed version
+net/http                   free text: matches all of the above fields
+```
+
+Field terms and free text are ANDed.
 
 ### Cache
 

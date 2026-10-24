@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-scomp is a TUI tool that fetches known vulnerabilities in the packages that the Git repository in the current directory depends on, and lets the user search and browse them with a fuzzy finder.
+scomp is a TUI tool that fetches known vulnerabilities in the packages that the Git repository in the current directory depends on, and lets the user filter and browse them.
 
 The name comes from the Star Wars scomp link (the connector R2-D2 plugs into terminals to read data). It maps to the action of reading the repository's lockfiles.
 
@@ -12,7 +12,7 @@ The name comes from the Star Wars scomp link (the connector R2-D2 plugs into ter
 
 - Show only vulnerabilities relevant to your own repository (not a browser for all CVEs)
 - Support lockfiles for many languages (without writing per-language parsers ourselves)
-- Search across package name, vulnerability ID, CVE ID, and summary with fzf-style fuzzy search
+- Filter with query terms (`severity:high`, `ecosystem:go`, `fixed:true`) and case-insensitive free text across package name, vulnerability ID, CVE ID, and summary
 - Make startup-to-list fast (show from cache immediately if lockfiles have not changed)
 
 ### Non-goals
@@ -56,7 +56,7 @@ The name comes from the Star Wars scomp link (the connector R2-D2 plugs into ter
                                     ┌───────────────┐
                                     │ tui           │
                                     │ Bubble Tea v2 │
-                                    │ + fuzzy       │
+                                    │ + query filter│
                                     └───────────────┘
 ```
 
@@ -67,7 +67,6 @@ The name comes from the Star Wars scomp link (the connector R2-D2 plugs into ter
 | TUI framework | `charm.land/bubbletea/v2` | v2 moved its import path to a vanity domain. `View()` returns `tea.View` |
 | UI components | `charm.land/bubbles/v2` | Uses `textinput`, `viewport` |
 | Styling | `charm.land/lipgloss/v2` | |
-| Fuzzy matching | `github.com/sahilm/fuzzy` | Candidate. Returns match positions (indexes), usable for highlighting. To verify: current API and performance |
 | Vulnerability scanning (lib impl) | `github.com/google/osv-scanner/v2/pkg/osvscanner` | v2.7.0. Requires Go 1.27. `DoScan(ScannerActions)` takes no context |
 | Opening a browser | Standard library + OS-specific command | macOS `open`, Linux `xdg-open` |
 
@@ -208,26 +207,29 @@ Listing is used only for cache key computation. The actual dependency extraction
 
 ```
 ┌ scomp ─ github.com/jedipunkz/foo ─ 12 findings (C:1 H:4 M:5 L:2) ─ cached 3h ago ┐
-│ > net/http█                                                       sev:all eco:all │
-├───────────────────────────────────────────┬──────────────────────────────────────┤
-│ ▶ CRIT  golang.org/x/net   v0.17.0  GO-2… │ GO-2024-2687                         │
-│   HIGH  golang.org/x/net   v0.17.0  GO-2… │ CVE-2023-45288                       │
-│   HIGH  lodash             4.17.20  GHSA… │                                      │
-│   MED   requests           2.28.0   PYSE… │ Package : golang.org/x/net v0.17.0   │
-│   ...                                     │ Source  : go.mod                     │
-│                                           │ Fixed   : v0.23.0                    │
-│                                           │                                      │
-│                                           │ HTTP/2 CONTINUATION flood in net/http│
-│                                           │ ...                                  │
-├───────────────────────────────────────────┴──────────────────────────────────────┤
+│ > severity:>=high eco:go█                                        sev:all eco:all │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ ▶ CRIT  golang.org/x/net   v0.17.0  GO-2024-2687  HTTP/2 CONTINUATION flood      │
+│   HIGH  golang.org/x/net   v0.17.0  GO-2025-1234  HTTP/2 rapid reset             │
+│   HIGH  golang.org/x/net   v0.17.0  GO-2025-5678  ...                            │
+│   ...                                                                            │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ GO-2024-2687                                                                     │
+│ CVE-2023-45288                                                                   │
+│                                                                                  │
+│ Package : golang.org/x/net v0.17.0                                               │
+│ Source  : go.mod                                                                 │
+│ Fixed   : v0.23.0                                                                │
+│ HTTP/2 CONTINUATION flood in net/http ...                                        │
+├──────────────────────────────────────────────────────────────────────────────────┤
 │ ↑↓ move  enter detail  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+r rescan  esc quit │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Top: search input (`bubbles/textinput`). Focus is on the input from startup, and typed characters always go into the query (same feel as fzf).
-- Left: Finding list. Matched characters are highlighted.
-- Right: preview of the selected Finding (`bubbles/viewport`).
-- When the terminal is narrower than 80 columns, hide the preview and toggle a full-screen detail view with `enter`.
+- Top: search input (`bubbles/textinput`). Focus is on the input from startup, and typed characters always go into the query.
+- Above: Finding list. Free-text matches are highlighted.
+- Below: detail pane of the selected Finding (`bubbles/viewport`), about 35% of the body height. Scrolled with `shift+↑` `shift+↓`.
+- `enter` toggles a full-screen detail view. On very short terminals where the list would drop below 3 rows, the pane is hidden and `enter` is the only way to see the detail.
 
 ### 10.2 Key bindings
 
@@ -237,7 +239,7 @@ Listing is used only for cache key computation. The actual dependency extraction
 | `↑` `↓` / `ctrl+p` `ctrl+n` | Move selection |
 | `pgup` `pgdown` | Page through the list |
 | `enter` | Show full-screen detail / go back |
-| `shift+↑` `shift+↓` | Scroll preview |
+| `shift+↑` `shift+↓` | Scroll the detail pane |
 | `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
 | `ctrl+s` | Cycle severity filter (all → critical → high+ → medium+) |
 | `ctrl+e` | Cycle ecosystem filter (all → detected ecosystems in order) |
@@ -247,7 +249,7 @@ Listing is used only for cache key computation. The actual dependency extraction
 
 Why `q` does not quit: typed characters always go into the query by design.
 
-### 10.3 Fuzzy search
+### 10.3 Query filtering
 
 The search target string for each Finding is precomputed by joining the following with spaces:
 
@@ -255,9 +257,22 @@ The search target string for each Finding is precomputed by joining the followin
 <Package.Name> <Package.Ecosystem> <ID> <CVEs...> <Summary>
 ```
 
-- Empty query: sort by severity desc → package name asc → ID asc.
-- With a query: fuzzy match score desc. Ties use the order above.
-- Filtering order: apply filters (severity, ecosystem, fixed-only) first, then fuzzy match the remainder.
+The query is a filter expression parsed into terms:
+
+| Term | Matches |
+|---|---|
+| `severity:<op><name>[,<name>...]` (also `sev:`) | Severity. `<op>` is one of `=`, `>=`, `>`, `<=`, `<` (default `=`); `<name>` is `critical` / `high` / `medium` (`moderate`) / `low` / `unknown`. Values in one term are ORed |
+| `ecosystem:<sub>` (also `eco:`) | Case-insensitive substring of the ecosystem |
+| `package:<sub>` (also `pkg:`) | Case-insensitive substring of the package name |
+| `id:<sub>` | Case-insensitive substring of the OSV ID |
+| `cve:<sub>` | Case-insensitive substring of any CVE ID |
+| `source:<sub>` | Case-insensitive substring of the lockfile path |
+| `fixed:true` / `fixed:false` | Findings with / without a fixed version |
+| `<text>` (free text) | Case-insensitive substring of the search key |
+
+- All terms are ANDed. An unknown key or unparsable value falls back to free text.
+- Empty query: sort by severity desc → package name asc → ID asc. Results always keep this order (no relevance scoring).
+- Filtering order: apply the key-binding filters (`ctrl+s` `ctrl+e` `ctrl+f`) first, then the query terms.
 - Expected volume: a few hundred findings or fewer per repository (assumption). Recomputing everything on each keystroke is enough, so no index is built. If input lag appears above 1000 items, add a debounce (50ms).
 
 ### 10.4 Status display
@@ -303,7 +318,7 @@ scomp [flags] [path]
 │       ├── model.go         # tea.Model
 │       ├── update.go
 │       ├── view.go
-│       ├── search.go        # filters + fuzzy matching
+│       ├── search.go        # query parsing + filtering
 │       └── styles.go
 ├── testdata/                # sample osv-scanner JSON output
 ├── DESIGN.md
@@ -339,7 +354,7 @@ scomp [flags] [path]
 | # | Scope | Estimate | Done when |
 |---|---|---|---|
 | M1 | model + exec impl + `--json` | 2 hours | `scomp --json` prints Findings as JSON |
-| M2 | TUI list + fuzzy search + preview | 4 hours | Typing a query in `scomp` narrows the list |
+| M2 | TUI list + query filter + detail pane | 4 hours | Typing a query in `scomp` narrows the list |
 | M3 | Cache | 2 hours | Second launch shows results without scanning |
 | M4 | Filters, `ctrl+o`, status display | 2 hours | All keys in §10.2 work |
 | M5 | lib impl | 1 day | `--scanner=lib` prints the same JSON as M1 |
@@ -359,5 +374,5 @@ Future considerations (after M6):
 | osv-scanner v2 JSON structure and the max-severity field name | Run `--format json` against a real repository |
 | osv-scanner v2 exit code definitions | Check official docs and source |
 | Stability of the osv-scanner v2 library API | Check `v2/pkg/osvscanner` on `pkg.go.dev` and the CHANGELOG |
-| Choice of fuzzy matching library | Compare `sahilm/fuzzy` with alternatives on 1000 items |
+| Query performance | Measure filtering on 1000 findings per keystroke |
 | Finalizing lockfile target file names | Cross-check against osv-scanner's supported lockfiles list |
