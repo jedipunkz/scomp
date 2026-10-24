@@ -1,5 +1,5 @@
 // Styles. Text colors follow the gruvbox (dark) palette; the terminal's
-// background is left untouched.
+// background is left untouched and no background colors are set on text.
 package tui
 
 import (
@@ -11,7 +11,6 @@ import (
 // gruvbox dark palette.
 const (
 	cFg     = "#ebdbb2"
-	cBg1    = "#3c3836"
 	cGray   = "#928374"
 	cRed    = "#fb4934"
 	cGreen  = "#b8bb26"
@@ -24,14 +23,12 @@ const (
 
 var (
 	// shared
-	styleTitle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
-	styleDim          = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color(cGray))
-	styleBold         = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cFg))
-	styleHighlight    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
-	styleHighlightSel = styleHighlight.Background(lipgloss.Color(cBg1))
-	styleError        = lipgloss.NewStyle().Foreground(lipgloss.Color(cRed))
-	styleMarker       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cOrange))
-	styleMarkerSel    = styleMarker.Background(lipgloss.Color(cBg1))
+	styleTitle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	styleDim       = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color(cGray))
+	styleBold      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cFg))
+	styleHighlight = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color(cRed))
+	styleMarker    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cOrange))
 
 	// pane title bars
 	stylePaneLabel = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
@@ -39,14 +36,13 @@ var (
 
 	// list columns
 	stylePackage    = lipgloss.NewStyle().Foreground(lipgloss.Color(cBlue))
-	stylePackageSel = stylePackage.Bold(true).Background(lipgloss.Color(cBg1))
+	stylePackageSel = stylePackage.Bold(true)
 	styleVersion    = lipgloss.NewStyle().Foreground(lipgloss.Color(cAqua))
-	styleVersionSel = styleVersion.Bold(true).Background(lipgloss.Color(cBg1))
+	styleVersionSel = styleVersion.Bold(true)
 	styleID         = lipgloss.NewStyle().Foreground(lipgloss.Color(cPurple))
-	styleIDSel      = styleID.Bold(true).Background(lipgloss.Color(cBg1))
+	styleIDSel      = styleID.Bold(true)
 	styleSummary    = lipgloss.NewStyle().Foreground(lipgloss.Color(cGray))
-	styleSummarySel = styleSummary.Background(lipgloss.Color(cBg1))
-	styleRowBg      = lipgloss.NewStyle().Background(lipgloss.Color(cBg1)) // selected-row padding
+	styleSummarySel = styleSummary.Bold(true)
 
 	// detail pane
 	styleDetailID  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
@@ -62,13 +58,3 @@ var (
 		model.SeverityUnknown:  lipgloss.NewStyle().Foreground(lipgloss.Color(cGray)),
 	}
 )
-
-// severityStyle is the style of a severity badge, with the selected-row
-// background when sel is true.
-func severityStyle(s model.Severity, sel bool) lipgloss.Style {
-	st := severityStyles[s]
-	if sel {
-		st = st.Background(lipgloss.Color(cBg1))
-	}
-	return st
-}

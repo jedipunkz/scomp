@@ -262,28 +262,21 @@ func (m Model) listLines(w, h int) []string {
 			matched[o] = true
 		}
 		nameSt, verSt, idSt := stylePackage, styleVersion, styleID
-		sumSt, hlSt := styleSummary, styleHighlight
+		sumSt := styleSummary
 		marker := "  "
 		if i == m.cursor {
-			marker = styleMarkerSel.Render("▶ ")
-			nameSt, verSt, idSt, sumSt, hlSt = stylePackageSel, styleVersionSel, styleIDSel, styleSummarySel, styleHighlightSel
+			marker = styleMarker.Render("▶ ")
+			nameSt, verSt, idSt, sumSt = stylePackageSel, styleVersionSel, styleIDSel, styleSummarySel
 		}
-		sev := severityStyle(f.Severity, i == m.cursor).Render(pad(f.Severity.Short(), 4))
+		sev := severityStyles[f.Severity].Render(pad(f.Severity.Short(), 4))
 		cols := []string{
 			marker + sev,
-			pad(ansi.Truncate(highlight(f.Package.Name, lay.name, matched, nameSt, hlSt), nameW, "…"), nameW),
+			pad(ansi.Truncate(highlight(f.Package.Name, lay.name, matched, nameSt, styleHighlight), nameW, "…"), nameW),
 			pad(ansi.Truncate(verSt.Render(f.Package.Version), verW, "…"), verW),
-			pad(ansi.Truncate(highlight(f.ID, lay.id, matched, idSt, hlSt), idW, "…"), idW),
-			highlight(f.Summary, lay.summary, matched, sumSt, hlSt),
+			pad(ansi.Truncate(highlight(f.ID, lay.id, matched, idSt, styleHighlight), idW, "…"), idW),
+			highlight(f.Summary, lay.summary, matched, sumSt, styleHighlight),
 		}
-		rowStr := strings.Join(cols, "  ")
-		if i == m.cursor {
-			// Extend the selection background across the whole row.
-			if n := w - ansi.StringWidth(rowStr); n > 0 {
-				rowStr += styleRowBg.Render(strings.Repeat(" ", n))
-			}
-		}
-		lines[row] = fit(rowStr, w)
+		lines[row] = fit(strings.Join(cols, "  "), w)
 	}
 	return lines
 }
