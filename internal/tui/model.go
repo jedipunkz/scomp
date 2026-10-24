@@ -1,0 +1,349 @@
+// Package tui implements the interactive finding browser.
+package tui
+
+import (
+	"context"
+	"slices"
+	"strings"
+	"time"
+	"unicode"
+
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/jedipunkz/scomp/internal/model"
+)
+
+// Config wires the TUI to the other layers.
+type Config struct {
+	Title       string // repository display name
+	ScannerPath string // resolved scanner binary shown in the header
+	Lockfiles   []string
+
+	// Initial findings from the cache. CachedAt is zero when there is no cache hit.
+	Findings []model.Finding
+	CachedAt time.Time
+
+	// Notice is shown in the status line at startup (e.g. a cache warning).
+	Notice string
+
+	// Scan runs a fresh scan. It is called from a tea.Cmd goroutine.
+	Scan func(ctx context.Context) ([]model.Finding, error)
+	// OnScanned is called after a successful scan, e.g. to write the cache.
+	OnScanned func([]model.Finding) error
+	// OpenURL opens a URL in the browser.
+	OpenURL func(url string) error
+	// ScanOnStart starts a scan immediately (no cache hit).
+	ScanOnStart bool
+
+	Now func() time.Time
+}
+
+type severityFilter int
+
+const (
+	sevAll severityFilter = iota
+	sevCritical
+	sevHighPlus
+	sevMediumPlus
+	sevFilterCount
+)
+
+func (s severityFilter) min() model.Severity {
+	switch s {
+	case sevCritical:
+		return model.SeverityCritical
+	case sevHighPlus:
+		return model.SeverityHigh
+	case sevMediumPlus:
+		return model.SeverityMedium
+	default:
+		return model.SeverityUnknown
+	}
+}
+
+func (s severityFilter) label() string {
+	switch s {
+	case sevCritical:
+		return "critical"
+	case sevHighPlus:
+		return "high+"
+	case sevMediumPlus:
+		return "medium+"
+	default:
+		return "all"
+	}
+}
+
+type Model struct {
+	cfg Config
+	ctx context.Context
+
+	input   textinput.Model
+	preview viewport.Model
+	spin    spinner.Model
+
+	findings []model.Finding // sanitized, sorted
+	keys     []string
+	layouts  []keyLayout
+	ecos     []string
+
+	results []Result
+	cursor  int
+	offset  int // first visible row in the list
+
+	sev       severityFilter
+	eco       int // 0 = all, otherwise index+1 into ecos
+	fixedOnly bool
+
+	scanning    bool
+	cancelScan  context.CancelFunc
+	scanErr     error
+	noLockfiles bool
+	cachedAt    time.Time
+	status      string
+
+	detail bool // full-screen detail
+	width  int
+	height int
+
+	// preview content cache key; re-rendered when any of these change
+	previewFor   int // finding index; -1 none
+	previewWidth int
+	previewErr   bool
+
+	focusCmd tea.Cmd
+}
+
+// previewInvalid forces the preview to be re-rendered.
+const previewInvalid = -2
+
+var timeZero time.Time
+
+type scanDoneMsg struct {
+	findings []model.Finding
+	err      error
+}
+
+type openedMsg struct{ err error }
+
+// New builds the TUI model. ctx cancels running scans.
+func New(ctx context.Context, cfg Config) Model {
+	ti := textinput.New()
+	ti.Prompt = "> "
+	ti.Placeholder = "search package, ID, CVE, summary"
+	focusCmd := ti.Focus()
+
+	m := Model{
+		focusCmd:   focusCmd,
+		cfg:        cfg,
+		ctx:        ctx,
+		input:      ti,
+		preview:    viewport.New(),
+		spin:       spinner.New(spinner.WithSpinner(spinner.Dot)),
+		status:     cfg.Notice,
+		cachedAt:   cfg.CachedAt,
+		previewFor: previewInvalid,
+		width:      80,
+		height:     24,
+	}
+	m.setFindings(cfg.Findings)
+	return m
+}
+
+func (m Model) now() time.Time {
+	if m.cfg.Now != nil {
+		return m.cfg.Now()
+	}
+	return time.Now()
+}
+
+func (m Model) Init() tea.Cmd {
+	cmds := []tea.Cmd{m.focusCmd}
+	if m.cfg.ScanOnStart {
+		cmds = append(cmds, func() tea.Msg { return startScanMsg{} })
+	}
+	return tea.Batch(cmds...)
+}
+
+type startScanMsg struct{}
+
+func (m *Model) startScan() tea.Cmd {
+	if m.scanning || m.cfg.Scan == nil {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.scanning = true
+	m.cancelScan = cancel
+	scan := m.cfg.Scan
+	return tea.Batch(m.spin.Tick, func() tea.Msg {
+		defer cancel()
+		fs, err := scan(ctx)
+		return scanDoneMsg{findings: fs, err: err}
+	})
+}
+
+func (m *Model) setFindings(fs []model.Finding) {
+	m.findings = make([]model.Finding, len(fs))
+	for i, f := range fs {
+		m.findings[i] = sanitizeFinding(f)
+	}
+	SortFindings(m.findings)
+	m.keys = make([]string, len(m.findings))
+	m.layouts = make([]keyLayout, len(m.findings))
+	ecoSet := map[string]bool{}
+	for i, f := range m.findings {
+		m.keys[i], m.layouts[i] = SearchKey(f)
+		if f.Package.Ecosystem != "" {
+			ecoSet[f.Package.Ecosystem] = true
+		}
+	}
+	prevEco := m.ecoName()
+	m.ecos = m.ecos[:0]
+	for e := range ecoSet {
+		m.ecos = append(m.ecos, e)
+	}
+	slices.Sort(m.ecos)
+	m.eco = 0
+	if i := slices.Index(m.ecos, prevEco); i >= 0 {
+		m.eco = i + 1
+	}
+	m.previewFor = previewInvalid
+	m.results = nil // old indexes are meaningless for the new slice
+	m.refresh()
+}
+
+func (m Model) ecoName() string {
+	if m.eco <= 0 || m.eco > len(m.ecos) {
+		return ""
+	}
+	return m.ecos[m.eco-1]
+}
+
+func (m Model) filter() Filter {
+	return Filter{MinSeverity: m.sev.min(), Ecosystem: m.ecoName(), FixedOnly: m.fixedOnly}
+}
+
+// refresh recomputes the visible results and keeps the cursor in range.
+func (m *Model) refresh() {
+	var selected = -1
+	if f, ok := m.selected(); ok {
+		selected = f
+	}
+	m.results = Search(m.findings, m.keys, m.input.Value(), m.filter())
+	m.cursor = 0
+	if m.input.Value() == "" && selected >= 0 {
+		// Keep the selection when only filters or data changed.
+		for i, r := range m.results {
+			if r.Index == selected {
+				m.cursor = i
+				break
+			}
+		}
+	}
+	m.clampOffset()
+	m.updatePreview()
+}
+
+func (m Model) selected() (int, bool) {
+	if m.cursor < 0 || m.cursor >= len(m.results) {
+		return -1, false
+	}
+	return m.results[m.cursor].Index, true
+}
+
+func (m *Model) moveCursor(delta int) {
+	if len(m.results) == 0 {
+		return
+	}
+	m.cursor = max(0, min(len(m.results)-1, m.cursor+delta))
+	m.clampOffset()
+	m.updatePreview()
+}
+
+func (m *Model) clampOffset() {
+	h := m.listHeight()
+	if h <= 0 {
+		m.offset = 0
+		return
+	}
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	}
+	if m.cursor >= m.offset+h {
+		m.offset = m.cursor - h + 1
+	}
+	m.offset = max(0, min(m.offset, max(0, len(m.results)-h)))
+}
+
+func (m *Model) updatePreview() {
+	m.layout()
+	idx, _ := m.selected()
+	showErr := m.detail && m.scanErr != nil
+	w := m.preview.Width()
+	if idx == m.previewFor && w == m.previewWidth && showErr == m.previewErr {
+		return
+	}
+	scrollReset := idx != m.previewFor
+	m.previewFor, m.previewWidth, m.previewErr = idx, w, showErr
+
+	var b strings.Builder
+	if showErr {
+		b.WriteString(m.renderError(w))
+		b.WriteString("\n\n")
+	}
+	if idx >= 0 {
+		b.WriteString(m.renderDetail(m.findings[idx], w))
+	}
+	m.preview.SetContent(b.String())
+	if scrollReset {
+		m.preview.GotoTop()
+	}
+}
+
+// sanitizeFinding strips terminal control sequences from externally sourced strings.
+func sanitizeFinding(f model.Finding) model.Finding {
+	f.ID = sanitize(f.ID)
+	f.Summary = sanitize(f.Summary)
+	f.Details = sanitize(f.Details)
+	f.Package.Name = sanitize(f.Package.Name)
+	f.Package.Version = sanitize(f.Package.Version)
+	f.Package.Ecosystem = sanitize(f.Package.Ecosystem)
+	f.Package.Source = sanitize(f.Package.Source)
+	f.Aliases = sanitizeAll(f.Aliases)
+	f.CVEs = sanitizeAll(f.CVEs)
+	f.FixedVersions = sanitizeAll(f.FixedVersions)
+	f.References = sanitizeAll(f.References)
+	return f
+}
+
+func sanitizeAll(ss []string) []string {
+	if ss == nil {
+		return nil
+	}
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = sanitize(s)
+	}
+	return out
+}
+
+// sanitize removes ANSI escape sequences and other control characters,
+// keeping newlines and converting tabs to spaces.
+func sanitize(s string) string {
+	s = ansi.Strip(s)
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n':
+			return r
+		case r == '\t':
+			return ' '
+		case unicode.IsControl(r), r == ' ', r == ' ':
+			return -1
+		}
+		return r
+	}, s)
+}
