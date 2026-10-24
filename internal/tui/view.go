@@ -17,8 +17,8 @@ const (
 	headerLines = 2 // title + query
 	chromeLines = 4 // top separator, detail separator, bottom separator, help
 	minListH    = 3
-	maxDetailH  = 14
-	helpText    = "↑↓ move  enter detail  shift+↑↓ scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
+	maxDetailH  = 16
+	helpText    = "↑↓ move  enter detail  shift+↑↓ j/k scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
 )
 
 func (m Model) statusLine() string {
@@ -49,7 +49,7 @@ func (m Model) detailHeight() int {
 		return 0
 	}
 	h := m.bodyHeight()
-	dh := min(max(h*35/100, 4), maxDetailH)
+	dh := min(max(h*55/100, 4), maxDetailH)
 	if h-dh < minListH {
 		return 0
 	}
@@ -117,16 +117,23 @@ func (m Model) headerLine() string {
 	for _, f := range m.findings {
 		counts[f.Severity]++
 	}
+	cnt := func(s model.Severity, label string) string {
+		return severityStyles[s].Render(fmt.Sprintf("%s:%d", label, counts[s]))
+	}
 	// Keep the end of long titles (repo name) so the status parts stay visible.
 	title := m.cfg.Title
 	if limit := max(12, m.width/3); ansi.StringWidth(title) > limit {
 		title = ansi.TruncateLeft(title, ansi.StringWidth(title)-limit+1, "…")
 	}
 	parts := []string{styleTitle.Render("scomp"), title}
-	sum := fmt.Sprintf("%d findings (C:%d H:%d M:%d L:%d", len(m.findings),
-		counts[model.SeverityCritical], counts[model.SeverityHigh], counts[model.SeverityMedium], counts[model.SeverityLow])
+	sum := fmt.Sprintf("%d findings (", len(m.findings)) + strings.Join([]string{
+		cnt(model.SeverityCritical, "C"),
+		cnt(model.SeverityHigh, "H"),
+		cnt(model.SeverityMedium, "M"),
+		cnt(model.SeverityLow, "L"),
+	}, " ")
 	if n := counts[model.SeverityUnknown]; n > 0 {
-		sum += fmt.Sprintf(" ?:%d", n)
+		sum += " " + cnt(model.SeverityUnknown, "?")
 	}
 	sum += ")"
 	if q := m.input.Value(); q != "" || m.filter() != (Filter{}) {
@@ -204,19 +211,19 @@ func (m Model) listLines(w, h int) []string {
 		for _, o := range r.Matched {
 			matched[o] = true
 		}
-		base := lipgloss.NewStyle()
+		nameSt, verSt, idSt := stylePackage, styleVersion, styleID
 		marker := "  "
 		if i == m.cursor {
-			base = styleSelected
 			marker = styleMarker.Render("▶ ")
+			nameSt, verSt, idSt = stylePackageSel, styleVersionSel, styleIDSel
 		}
 		sev := severityStyles[f.Severity].Render(pad(f.Severity.Short(), 4))
 		cols := []string{
 			marker + sev,
-			pad(ansi.Truncate(highlight(f.Package.Name, lay.name, matched, base), nameW, "…"), nameW),
-			pad(base.Render(ansi.Truncate(f.Package.Version, verW, "…")), verW),
-			pad(ansi.Truncate(highlight(f.ID, lay.id, matched, base), idW, "…"), idW),
-			styleDim.Render(highlight(f.Summary, lay.summary, matched, lipgloss.NewStyle())),
+			pad(ansi.Truncate(highlight(f.Package.Name, lay.name, matched, nameSt), nameW, "…"), nameW),
+			pad(ansi.Truncate(verSt.Render(f.Package.Version), verW, "…"), verW),
+			pad(ansi.Truncate(highlight(f.ID, lay.id, matched, idSt), idW, "…"), idW),
+			highlight(f.Summary, lay.summary, matched, styleSummary),
 		}
 		lines[row] = fit(strings.Join(cols, "  "), w)
 	}
@@ -292,21 +299,29 @@ func (m Model) renderDetail(f model.Finding, w int) string {
 		return strings.Join(ss, ", ")
 	}
 
-	line(styleBold.Render(f.ID))
+	line(styleDetailID.Render(f.ID))
 	if len(f.CVEs) > 0 {
-		line(strings.Join(f.CVEs, ", "))
+		line(styleDetailAlt.Render(strings.Join(f.CVEs, ", ")))
 	}
 	line("")
 	field("Package", f.Package.Name+" "+f.Package.Version)
 	field("Ecosystem", f.Package.Ecosystem)
 	field("Source", f.Package.Source)
-	field("Fixed", orNone(f.FixedVersions))
+	fixed := orNone(f.FixedVersions)
+	if len(f.FixedVersions) > 0 {
+		fixed = styleFixed.Render(fixed)
+	}
+	field("Fixed", fixed)
 	sev := severityStyles[f.Severity].Render(f.Severity.String())
 	if f.CVSSScore > 0 {
 		sev += fmt.Sprintf(" (%.1f)", f.CVSSScore)
 	}
 	field("Severity", sev)
-	field("Aliases", orNone(f.Aliases))
+	aliases := orNone(f.Aliases)
+	if len(f.Aliases) > 0 {
+		aliases = styleDetailAlt.Render(aliases)
+	}
+	field("Aliases", aliases)
 	if !f.Published.IsZero() {
 		field("Published", f.Published.Format("2006-01-02"))
 	}
@@ -323,9 +338,13 @@ func (m Model) renderDetail(f model.Finding, w int) string {
 		line("")
 	}
 	line(styleDim.Render("References:"))
-	line(OSVURL(f.ID))
+	ref := func(u string) {
+		b.WriteString(styleURL.Render(wrap(u, w)))
+		b.WriteByte('\n')
+	}
+	ref(OSVURL(f.ID))
 	for _, r := range f.References {
-		line(r)
+		ref(r)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

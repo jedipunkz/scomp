@@ -70,7 +70,7 @@ func selectedID(m Model) string {
 
 func TestKeyStrings(t *testing.T) {
 	// Guard the key names handleKey switches on.
-	for _, s := range []string{"up", "down", "enter", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n"} {
+	for _, s := range []string{"up", "down", "enter", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k"} {
 		if got := key(s).String(); got != s {
 			t.Errorf("key(%q).String() = %q", s, got)
 		}
@@ -142,6 +142,27 @@ func TestFilterKeepsSelection(t *testing.T) {
 	m, _ = send(t, m, key("ctrl+e")) // Go
 	if got := selectedID(m); got != "GO-1" {
 		t.Errorf("selection after filter = %s, want GO-1", got)
+	}
+}
+
+func TestDetailScrollKeys(t *testing.T) {
+	// Content taller than the pane is needed for scrolling.
+	long := model.Finding{
+		ID:      "LONG-1",
+		Details: strings.Repeat("line\n", 60),
+		Package: model.Package{Name: "pkg"},
+	}
+	m := newTestModel(Config{Findings: []model.Finding{long}})
+	if m.preview.YOffset() != 0 {
+		t.Fatalf("initial YOffset = %d", m.preview.YOffset())
+	}
+	m, _ = send(t, m, key("j"))
+	if m.preview.YOffset() != 1 {
+		t.Errorf("j: YOffset = %d, want 1", m.preview.YOffset())
+	}
+	m, _ = send(t, m, key("k"))
+	if m.preview.YOffset() != 0 {
+		t.Errorf("k: YOffset = %d, want 0", m.preview.YOffset())
 	}
 }
 

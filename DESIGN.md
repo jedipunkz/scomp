@@ -228,7 +228,7 @@ Listing is used only for cache key computation. The actual dependency extraction
 
 - Top: search input (`bubbles/textinput`). Focus is on the input from startup, and typed characters always go into the query.
 - Above: Finding list. Free-text matches are highlighted.
-- Below: detail pane of the selected Finding (`bubbles/viewport`), about 35% of the body height. Scrolled with `shift+↑` `shift+↓`.
+- Below: detail pane of the selected Finding (`bubbles/viewport`), about 55% of the body height. Scrolled with `shift+↑` `shift+↓` `j` `k`.
 - `enter` toggles a full-screen detail view. On very short terminals where the list would drop below 3 rows, the pane is hidden and `enter` is the only way to see the detail.
 
 ### 10.2 Key bindings
@@ -239,7 +239,7 @@ Listing is used only for cache key computation. The actual dependency extraction
 | `↑` `↓` / `ctrl+p` `ctrl+n` | Move selection |
 | `pgup` `pgdown` | Page through the list |
 | `enter` | Show full-screen detail / go back |
-| `shift+↑` `shift+↓` | Scroll the detail pane |
+| `shift+↑` `shift+↓` / `k` `j` | Scroll the detail pane |
 | `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
 | `ctrl+s` | Cycle severity filter (all → critical → high+ → medium+) |
 | `ctrl+e` | Cycle ecosystem filter (all → detected ecosystems in order) |
@@ -247,7 +247,7 @@ Listing is used only for cache key computation. The actual dependency extraction
 | `ctrl+r` | Rescan ignoring the cache |
 | `esc` / `ctrl+c` | Quit |
 
-Why `q` does not quit: typed characters always go into the query by design.
+Why `q` does not quit: typed characters always go into the query by design. Exception: `j` / `k` are reserved for scrolling the detail pane and never reach the query.
 
 ### 10.3 Query filtering
 
