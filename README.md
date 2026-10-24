@@ -73,7 +73,7 @@ Field terms and free text are ANDed. `j` / `k` scroll the detail pane instead of
 
 ### Cache
 
-Results are cached in `os.UserCacheDir()/scomp/` (Linux: `$XDG_CACHE_HOME` or `~/.cache`, macOS: `~/Library/Caches`), keyed by the paths and contents of the repository's lockfiles together with the scomp version, the scanner (embedded osv-scanner version or `osv-scanner` path) and `--offline`. A cached result is used for 24 hours by default, because new vulnerabilities are published even when lockfiles do not change. Press `ctrl+r` to rescan.
+Results are cached in `os.UserCacheDir()/scomp/` (Linux: `$XDG_CACHE_HOME` or `~/.cache`, macOS: `~/Library/Caches`), keyed by the paths and contents of the repository's lockfiles together with the scomp version, the scanner (embedded osv-scanner version or `osv-scanner` path) and `--offline`. A cached result created in the future (the system clock went back) is ignored. A cached result is used for 24 hours by default, because new vulnerabilities are published even when lockfiles do not change. Press `ctrl+r` to rescan.
 
 ## Privacy
 

@@ -106,6 +106,7 @@ func TestStoreLoadSave(t *testing.T) {
 		{"other root", "/other", "k", 0, false},
 		{"within ttl", "/r", "k", time.Hour, true},
 		{"expired", "/r", "k", time.Hour + time.Second, false},
+		{"created in the future", "/r", "k", -time.Second, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

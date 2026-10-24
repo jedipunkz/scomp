@@ -182,7 +182,7 @@ Some OSV advisories have no CVE ID (e.g. only `GO-`). Limiting to CVEs would mis
 | Location | `os.UserCacheDir()/scomp/<first 16 hex chars of SHA-256 of root path>.json` |
 | Key | SHA-256 of the scanner identity (scomp version, embedded osv-scanner version or `osv-scanner` path, `--offline`) and the lockfile set (paths + contents) |
 | TTL | 24 hours (configurable with `--cache-ttl`). A TTL is needed because new vulnerabilities are added to the DB even when lockfiles are unchanged |
-| Invalidation | `--no-cache` skips both reads and writes. `ctrl+r` rescans and overwrites. |
+| Invalidation | `--no-cache` skips both reads and writes. `ctrl+r` rescans and overwrites. An entry whose `created_at` is in the future (clock went back) is a miss |
 | Write method | Write to a temp file and replace with `os.Rename` (to avoid leaving a corrupt file on interruption) |
 | Permissions | Directory 0700, file 0600 |
 

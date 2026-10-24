@@ -79,6 +79,7 @@ func (s *Store) Path(root string) string {
 }
 
 // Load returns the entry for root if it exists, matches key and is younger than ttl.
+// An entry created in the future (the clock went back) is treated as a miss.
 // A corrupt file is removed and ErrCorrupt is returned.
 func (s *Store) Load(root, key string, ttl time.Duration) (Entry, bool, error) {
 	p := s.Path(root)
@@ -96,7 +97,8 @@ func (s *Store) Load(root, key string, ttl time.Duration) (Entry, bool, error) {
 		}
 		return Entry{}, false, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
-	if e.Key != key || e.Root != root || s.now().Sub(e.CreatedAt) > ttl {
+	age := s.now().Sub(e.CreatedAt)
+	if e.Key != key || e.Root != root || age < 0 || age > ttl {
 		return Entry{}, false, nil
 	}
 	return e, true, nil
