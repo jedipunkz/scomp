@@ -77,7 +77,7 @@ External commands (exec impl only): `osv-scanner` (v2), `git`.
 1. Parse flags.
 2. Get the root via `git rev-parse --show-toplevel`. If outside Git, use the current directory as the root and print a one-line warning.
 3. List lockfiles under the root (walk using the target file names in §9; exclude `.git/`, `node_modules/`, `vendor/`).
-4. Compute SHA-256 from the paths and contents of the listed lockfiles and use it as the cache key.
+4. Compute SHA-256 from the scanner identity (scomp version, scanner and its version or path, `--offline`) and the paths and contents of the listed lockfiles, and use it as the cache key.
 5. If the cache exists, the key matches, and it is within TTL, read `[]Finding` from the cache.
 6. Otherwise, start the TUI first showing "scanning", and run the scanner as a background `tea.Cmd`.
 7. On scan completion, receive `scanDoneMsg`, update the list, and write the cache.
@@ -180,9 +180,9 @@ Some OSV advisories have no CVE ID (e.g. only `GO-`). Limiting to CVEs would mis
 | Item | Value |
 |---|---|
 | Location | `os.UserCacheDir()/scomp/<first 16 hex chars of SHA-256 of root path>.json` |
-| Key | SHA-256 of the lockfile set (paths + contents) |
+| Key | SHA-256 of the scanner identity (scomp version, embedded osv-scanner version or `osv-scanner` path, `--offline`) and the lockfile set (paths + contents) |
 | TTL | 24 hours (configurable with `--cache-ttl`). A TTL is needed because new vulnerabilities are added to the DB even when lockfiles are unchanged |
-| Invalidation | `--no-cache` skips both reads and writes. `ctrl+r` rescans and overwrites |
+| Invalidation | `--no-cache` skips both reads and writes. `ctrl+r` rescans and overwrites. |
 | Write method | Write to a temp file and replace with `os.Rename` (to avoid leaving a corrupt file on interruption) |
 | Permissions | Directory 0700, file 0600 |
 

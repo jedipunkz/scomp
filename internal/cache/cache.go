@@ -25,10 +25,13 @@ type Entry struct {
 	Findings  []model.Finding `json:"findings"`
 }
 
-// Key returns the SHA-256 of the lockfiles' relative paths and contents.
+// Key returns the SHA-256 of the scanner identity and the lockfiles' relative
+// paths and contents. scanner identifies the implementation, its version and
+// mode (e.g. offline), so results from a different scanner setup are not reused.
 // files are slash-separated paths relative to root.
-func Key(root string, files []string) (string, error) {
+func Key(root, scanner string, files []string) (string, error) {
 	h := sha256.New()
+	_, _ = fmt.Fprintf(h, "%s\x00", scanner)
 	for _, f := range files {
 		_, _ = fmt.Fprintf(h, "%s\x00", f)
 		fh, err := os.Open(filepath.Join(root, filepath.FromSlash(f)))

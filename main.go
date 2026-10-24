@@ -119,7 +119,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		if store, err = cache.DefaultStore(); err != nil {
 			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", model.Sanitize(err.Error()))
 			store = nil
-		} else if key, err = cache.Key(root, lockfiles); err != nil {
+		} else if key, err = cache.Key(root, scannerID(scannerPath, o.offline), lockfiles); err != nil {
 			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", model.Sanitize(err.Error()))
 			store = nil
 		}
@@ -175,6 +175,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	return err
+}
+
+// scannerID identifies everything besides the lockfiles that changes scan
+// results: the scomp version (parsing), the scanner and its version, and the
+// offline mode.
+func scannerID(scannerPath string, offline bool) string {
+	return fmt.Sprintf("scomp %s; %s; offline=%t", versionString(), scannerPath, offline)
 }
 
 func newScanner(o options) (scanner.Scanner, string, error) {

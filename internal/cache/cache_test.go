@@ -27,22 +27,22 @@ func TestKey(t *testing.T) {
 	writeFile(t, root, "web/package-lock.json", "{}")
 	files := []string{"go.mod", "web/package-lock.json"}
 
-	k1, err := Key(root, files)
+	k1, err := Key(root, "s", files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	k2, _ := Key(root, files)
+	k2, _ := Key(root, "s", files)
 	if k1 != k2 {
 		t.Error("key must be deterministic")
 	}
 
 	writeFile(t, root, "go.mod", "module b")
-	k3, _ := Key(root, files)
+	k3, _ := Key(root, "s", files)
 	if k3 == k1 {
 		t.Error("key must change when content changes")
 	}
 
-	k4, _ := Key(root, files[:1])
+	k4, _ := Key(root, "s", files[:1])
 	if k4 == k3 {
 		t.Error("key must change when the file set changes")
 	}
@@ -51,13 +51,18 @@ func TestKey(t *testing.T) {
 	r2 := t.TempDir()
 	writeFile(t, r2, "a", "bc")
 	writeFile(t, r2, "ab", "c")
-	ka, _ := Key(r2, []string{"a"})
-	kb, _ := Key(r2, []string{"ab"})
+	ka, _ := Key(r2, "s", []string{"a"})
+	kb, _ := Key(r2, "s", []string{"ab"})
 	if ka == kb {
 		t.Error("path/content boundary must be unambiguous")
 	}
 
-	if _, err := Key(root, []string{"missing"}); err == nil {
+	k5, _ := Key(root, "other", files)
+	if k5 == k3 {
+		t.Error("key must change when the scanner changes")
+	}
+
+	if _, err := Key(root, "s", []string{"missing"}); err == nil {
 		t.Error("expected error for missing file")
 	}
 }
