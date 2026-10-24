@@ -1,0 +1,79 @@
+version: "2"
+
+linters:
+  # Default (standard) set: errcheck, govet, ineffassign, staticcheck, unused.
+  enable:
+    - depguard
+    - errorlint
+    - gosec
+  settings:
+    gosec:
+      excludes:
+        # G204: subprocess execution with a variable. The tool's purpose is to
+        # run `osv-scanner` (exec scanner) and `git` by name; the caller always
+        # passes argument lists, never a shell string. G204 fires on any
+        # variable argument, so keeping it would train everyone to skip gosec
+        # output. `sh -c` with external input stays banned via CLAUDE.md, the
+        # PR template and AI review.
+        - G204
+        # G304: file inclusion via a variable. Only app-decided paths are
+        # read (the cache file, the scan root's lockfiles).
+        - G304
+    depguard:
+      rules:
+        model-is-leaf:
+          files:
+            - "**/internal/model/**"
+          deny:
+            - pkg: github.com/jedipunkz/scomp/internal
+              desc: model is a leaf package; it must not import other internal packages
+        cache-imports-model-only:
+          files:
+            - "**/internal/cache/**"
+          deny:
+            - pkg: github.com/jedipunkz/scomp/internal/repo
+              desc: cache may import only internal/model; run it from main, not from cache
+            - pkg: github.com/jedipunkz/scomp/internal/scanner
+              desc: cache may import only internal/model; run it from main, not from cache
+            - pkg: github.com/jedipunkz/scomp/internal/tui
+              desc: cache may import only internal/model; run it from main, not from cache
+        scanner-imports-model-only:
+          files:
+            - "**/internal/scanner/**"
+          deny:
+            - pkg: github.com/jedipunkz/scomp/internal/cache
+              desc: scanner may import only internal/model; run it from main, not from scanner
+            - pkg: github.com/jedipunkz/scomp/internal/repo
+              desc: scanner may import only internal/model; run it from main, not from scanner
+            - pkg: github.com/jedipunkz/scomp/internal/tui
+              desc: scanner may import only internal/model; run it from main, not from scanner
+        tui-imports-model-only:
+          files:
+            - "**/internal/tui/**"
+          deny:
+            - pkg: github.com/jedipunkz/scomp/internal/cache
+              desc: tui may import only internal/model; run it from main, not from tui
+            - pkg: github.com/jedipunkz/scomp/internal/repo
+              desc: tui may import only internal/model; run it from main, not from tui
+            - pkg: github.com/jedipunkz/scomp/internal/scanner
+              desc: tui may import only internal/model; run it from main, not from tui
+        tui-only-from-main:
+          files:
+            - "!**/main.go"
+          deny:
+            - pkg: github.com/jedipunkz/scomp/internal/tui
+              desc: only the root main package may import internal/tui
+
+  exclusions:
+    rules:
+      # The fake osv-scanner script in exec_test.go must be executable to be
+      # run by exec.Command; everything else in tests keeps gosec's perms.
+      - path: _test\.go
+        linters:
+          - gosec
+        text: G306
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

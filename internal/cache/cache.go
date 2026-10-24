@@ -30,17 +30,20 @@ type Entry struct {
 func Key(root string, files []string) (string, error) {
 	h := sha256.New()
 	for _, f := range files {
-		fmt.Fprintf(h, "%s\x00", f)
+		_, _ = fmt.Fprintf(h, "%s\x00", f)
 		fh, err := os.Open(filepath.Join(root, filepath.FromSlash(f)))
 		if err != nil {
 			return "", err
 		}
-		n, err := io.Copy(h, fh)
-		fh.Close()
-		if err != nil {
-			return "", err
+		n, copyErr := io.Copy(h, fh)
+		closeErr := fh.Close()
+		if copyErr != nil {
+			return "", copyErr
 		}
-		fmt.Fprintf(h, "\x00%d\x00", n)
+		if closeErr != nil {
+			return "", closeErr
+		}
+		_, _ = fmt.Fprintf(h, "\x00%d\x00", n)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
@@ -86,9 +89,9 @@ func (s *Store) Load(root, key string, ttl time.Duration) (Entry, bool, error) {
 	var e Entry
 	if err := json.Unmarshal(data, &e); err != nil {
 		if rmErr := os.Remove(p); rmErr != nil {
-			return Entry{}, false, fmt.Errorf("%w (%v); remove failed: %v", ErrCorrupt, err, rmErr)
+			return Entry{}, false, fmt.Errorf("%w: %w (remove failed: %w)", ErrCorrupt, err, rmErr)
 		}
-		return Entry{}, false, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		return Entry{}, false, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
 	if e.Key != key || e.Root != root || s.now().Sub(e.CreatedAt) > ttl {
 		return Entry{}, false, nil
@@ -113,13 +116,13 @@ func (s *Store) Save(root, key string, findings []model.Finding) (Entry, error) 
 	if err != nil {
 		return Entry{}, err
 	}
-	defer os.Remove(tmp.Name()) // no-op after a successful rename
+	defer func() { _ = os.Remove(tmp.Name()) }() // no-op after a successful rename
 	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return Entry{}, err
 	}
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return Entry{}, err
 	}
 	if err := tmp.Close(); err != nil {

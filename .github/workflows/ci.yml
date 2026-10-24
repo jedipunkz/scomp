@@ -1,0 +1,169 @@
+name: Build and Test
+
+on:
+  pull_request:
+    paths:
+      - "**.go"
+      - ".github/workflows/ci.yml"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - "testdata/**"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test with race detector
+        run: go test -race ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # base and head are measured on the same runner so the comparison
+      # reflects the code change, not the environment.
+      - name: Run tests with coverage (base)
+        run: |
+          set -o pipefail
+          git worktree add "$RUNNER_TEMP/base" "${{ github.event.pull_request.base.sha }}"
+          (cd "$RUNNER_TEMP/base" && go test -coverprofile="$RUNNER_TEMP/coverage-base.out" ./...)
+      - name: Run tests with coverage (head)
+        run: go test -coverprofile="$RUNNER_TEMP/coverage-head.out" ./...
+      - name: Compute totals
+        id: totals
+        run: |
+          base=$(go tool cover -func="$RUNNER_TEMP/coverage-base.out" | awk '/^total:/ { print substr($3, 1, length($3)-1) }')
+          head=$(go tool cover -func="$RUNNER_TEMP/coverage-head.out" | awk '/^total:/ { print substr($3, 1, length($3)-1) }')
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "delta=$(awk -v h="$head" -v b="$base" 'BEGIN { printf "%.1f", h - b }')" >> "$GITHUB_OUTPUT"
+      - name: Fail when total coverage drops
+        env:
+          BASE: ${{ steps.totals.outputs.base }}
+          HEAD: ${{ steps.totals.outputs.head }}
+        run: |
+          if awk -v h="$HEAD" -v b="$BASE" \
+            'BEGIN { exit (h + 0.5 < b) ? 0 : 1 }'; then
+            echo "::error::Total coverage dropped from $BASE% to $HEAD% (tolerance 0.5 pp)"
+            exit 1
+          fi
+      - name: Comment coverage report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          BASE: ${{ steps.totals.outputs.base }}
+          HEAD: ${{ steps.totals.outputs.head }}
+          DELTA: ${{ steps.totals.outputs.delta }}
+        run: |
+          body="<!-- scomp-coverage -->
+          Total coverage: ${HEAD}% (base ${BASE}%, delta ${DELTA} pp, tolerance 0.5 pp)"
+          marker='<!-- scomp-coverage -->'
+          id=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$id" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" -f body="$body" >/dev/null
+          fi
+
+  bench:
+    name: Bench
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@v0.0.0-20261009192801-be2c69fb417e
+      - name: Run benchmarks on PR head
+        run: |
+          go test -run '^$' -bench . -benchmem -count 10 -benchtime=100x \
+            ./internal/tui/ ./internal/scanner/ > bench-head.txt
+      - name: Run benchmarks on base branch
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "${{ github.event.pull_request.base.sha }}"
+          (cd "$RUNNER_TEMP/base" && go test -run '^$' -bench . -benchmem -count 10 -benchtime=100x \
+            ./internal/tui/ ./internal/scanner/) > bench-base.txt
+      - name: Compare benchmarks
+        run: benchstat bench-base.txt bench-head.txt > bench-diff.txt || true
+      - name: Comment benchmark diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "<!-- scomp-bench -->"
+            echo "Benchmark diff (base vs head, same runner). Timing is advisory; allocation counts are gated by TestSearch_AllocCount."
+            echo '```'
+            cat bench-diff.txt
+            echo '```'
+          } > body.md
+          marker='<!-- scomp-bench -->'
+          id=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$id" -F body=@body.md >/dev/null
+          else
+            gh api --method POST "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" -F body=@body.md >/dev/null
+          fi

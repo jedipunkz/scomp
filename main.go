@@ -55,7 +55,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs := flag.NewFlagSet("scomp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
-		fmt.Fprintln(stderr, "usage: scomp [flags] [path]")
+		_, _ = fmt.Fprintln(stderr, "usage: scomp [flags] [path]")
 		fs.PrintDefaults()
 	}
 	fs.BoolVar(&o.noCache, "no-cache", false, "do not read or write the cache")
@@ -88,7 +88,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if o.version {
-		fmt.Fprintln(stdout, "scomp", versionString())
+		_, _ = fmt.Fprintln(stdout, "scomp", versionString())
 		return nil
 	}
 
@@ -100,7 +100,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%s is not a directory", root)
 	}
 	if !inGit {
-		fmt.Fprintf(stderr, "warning: %s is not in a git repository; scanning it as the root\n", root)
+		_, _ = fmt.Fprintf(stderr, "warning: %s is not in a git repository; scanning it as the root\n", root)
 	}
 
 	sc, scannerPath, err := newScanner(o)
@@ -117,10 +117,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	var key string
 	if !o.noCache {
 		if store, err = cache.DefaultStore(); err != nil {
-			fmt.Fprintf(stderr, "warning: cache disabled: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", err)
 			store = nil
 		} else if key, err = cache.Key(root, lockfiles); err != nil {
-			fmt.Fprintf(stderr, "warning: cache disabled: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", err)
 			store = nil
 		}
 	}
@@ -132,7 +132,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		switch {
 		case err != nil:
 			notice = "cache: " + err.Error()
-			fmt.Fprintln(stderr, "warning:", notice)
+			_, _ = fmt.Fprintln(stderr, "warning:", notice)
 		case ok:
 			cached = &e
 		}
@@ -200,17 +200,17 @@ func runJSON(ctx context.Context, sc scanner.Scanner, root string, cached *cache
 		fs, err := sc.Scan(ctx, root)
 		switch {
 		case errors.Is(err, scanner.ErrNoPackages):
-			fmt.Fprintln(stderr, "scomp:", err)
+			_, _ = fmt.Fprintln(stderr, "scomp:", err)
 		case err != nil:
 			var d interface{ Details() string }
 			if errors.As(err, &d) && d.Details() != "" {
-				fmt.Fprintln(stderr, strings.TrimRight(d.Details(), "\n"))
+				_, _ = fmt.Fprintln(stderr, strings.TrimRight(d.Details(), "\n"))
 			}
 			return err
 		default:
 			findings = fs
 			if err := save(fs); err != nil {
-				fmt.Fprintln(stderr, "warning: cache write failed:", err)
+				_, _ = fmt.Fprintln(stderr, "warning: cache write failed:", err)
 			}
 		}
 	}
