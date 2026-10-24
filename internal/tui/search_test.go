@@ -30,25 +30,25 @@ func ids(fs []model.Finding, rs []Result) []string {
 func TestSortFindings(t *testing.T) {
 	fs := sampleFindings()
 	SortFindings(fs)
-	got := ids(fs, Search(fs, keysOf(fs), "", Filter{}))
+	got := ids(fs, Search(fs, normOf(fs), "", Filter{}))
 	want := []string{"GHSA-1", "GO-1", "GO-2", "PYSEC-1", "GO-4", "GO-3"}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
-func keysOf(fs []model.Finding) []string {
-	keys := make([]string, len(fs))
+func normOf(fs []model.Finding) []Normalized {
+	norms := make([]Normalized, len(fs))
 	for i, f := range fs {
-		keys[i], _ = SearchKey(f)
+		norms[i], _ = Normalize(f)
 	}
-	return keys
+	return norms
 }
 
 func TestSearch(t *testing.T) {
 	fs := sampleFindings()
 	SortFindings(fs)
-	keys := keysOf(fs)
+	norms := normOf(fs)
 
 	tests := []struct {
 		name   string
@@ -70,7 +70,7 @@ func TestSearch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ids(fs, Search(fs, keys, tt.query, tt.filter))
+			got := ids(fs, Search(fs, norms, tt.query, tt.filter))
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -84,7 +84,7 @@ func TestSearchTiesKeepSortedOrder(t *testing.T) {
 		{ID: "A", Severity: model.SeverityHigh, Package: model.Package{Name: "pkg"}},
 	}
 	SortFindings(fs)
-	got := ids(fs, Search(fs, keysOf(fs), "pkg", Filter{}))
+	got := ids(fs, Search(fs, normOf(fs), "pkg", Filter{}))
 	if want := []string{"A", "B"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -93,7 +93,7 @@ func TestSearchTiesKeepSortedOrder(t *testing.T) {
 func TestQueryFilters(t *testing.T) {
 	fs := sampleFindings()
 	SortFindings(fs)
-	keys := keysOf(fs)
+	norms := normOf(fs)
 
 	tests := []struct {
 		name  string
@@ -125,7 +125,7 @@ func TestQueryFilters(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ids(fs, Search(fs, keys, tt.query, Filter{}))
+			got := ids(fs, Search(fs, norms, tt.query, Filter{}))
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -136,21 +136,21 @@ func TestQueryFilters(t *testing.T) {
 func TestQueryMatchesFreeTextAndOffsets(t *testing.T) {
 	fs := sampleFindings()
 	SortFindings(fs)
-	keys := keysOf(fs)
+	norms := normOf(fs)
 
 	// Free text must match the joined key, not only single fields.
-	got := ids(fs, Search(fs, keys, "pollution", Filter{}))
+	got := ids(fs, Search(fs, norms, "pollution", Filter{}))
 	if want := []string{"GHSA-1"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
 	// Matched offsets point at the term occurrences in the key.
-	rs := Search(fs, keys, "go", Filter{})
+	rs := Search(fs, norms, "go", Filter{})
 	if len(rs) == 0 {
 		t.Fatal("no results")
 	}
 	for _, r := range rs {
-		lower := strings.ToLower(keys[r.Index])
+		lower := norms[r.Index].Key
 		for _, o := range r.Matched {
 			if !strings.HasPrefix(lower[o:], "go") {
 				t.Errorf("offset %d in %q is not a match", o, lower)

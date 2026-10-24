@@ -47,14 +47,14 @@ func (h helpKeyMap) FullHelp() [][]key.Binding {
 
 func (m Model) statusLine() string {
 	if m.scanErr != nil {
-		msg := "error: " + firstLine(m.scanErr.Error())
+		msg := "error: " + firstLine(model.Sanitize(m.scanErr.Error()))
 		if !m.detail {
 			msg += " (enter: details)"
 		}
 		return styleError.Render(msg)
 	}
 	if m.status != "" {
-		return styleDim.Render(m.status)
+		return styleDim.Render(model.Sanitize(m.status))
 	}
 	return ""
 }
@@ -147,10 +147,7 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) headerLine() string {
-	counts := map[model.Severity]int{}
-	for _, f := range m.findings {
-		counts[f.Severity]++
-	}
+	counts := m.sevCounts
 	cnt := func(s model.Severity, label string) string {
 		return severityStyles[s].Render(fmt.Sprintf("%s:%d", label, counts[s]))
 	}
@@ -235,12 +232,7 @@ func (m Model) listLines(w, h int) []string {
 		return center(msg, w, h)
 	}
 
-	nameW, verW, idW := 0, 0, 0
-	for _, f := range m.findings {
-		nameW = max(nameW, ansi.StringWidth(f.Package.Name))
-		verW = max(verW, ansi.StringWidth(f.Package.Version))
-		idW = max(idW, ansi.StringWidth(f.ID))
-	}
+	nameW, verW, idW := m.nameMaxW, m.verMaxW, m.idMaxW
 	// marker(2) + sev(4) + 3 gaps
 	avail := max(0, w-2-4-3*2)
 	nameW = min(nameW, max(8, avail*45/100))
@@ -405,13 +397,13 @@ type detailer interface{ Details() string }
 func (m Model) renderError(w int) string {
 	w = max(10, w)
 	var b strings.Builder
-	b.WriteString(styleError.Render(wrap("Last scan failed: "+sanitize(m.scanErr.Error()), w)))
+	b.WriteString(styleError.Render(wrap("Last scan failed: "+model.Sanitize(m.scanErr.Error()), w)))
 	var d detailer
 	if errors.As(m.scanErr, &d) && d.Details() != "" {
 		b.WriteString("\n\n")
 		b.WriteString(styleDim.Render("stderr:"))
 		b.WriteByte('\n')
-		b.WriteString(wrap(sanitize(strings.TrimSpace(d.Details())), w))
+		b.WriteString(wrap(model.Sanitize(strings.TrimSpace(d.Details())), w))
 	}
 	return b.String()
 }

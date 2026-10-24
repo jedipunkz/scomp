@@ -120,7 +120,10 @@ func Parse(data []byte, root string) ([]model.Finding, error) {
 }
 
 func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.Finding, bool) {
-	if len(g.ids) == 0 {
+	if len(g.ids) == 0 || g.ids[0] == "" {
+		// An empty first ID would produce a row with no ID and a broken
+		// osv.dev link; real osv-scanner output never contains one, but the
+		// parser must not emit it either (found by FuzzParse).
 		return model.Finding{}, false
 	}
 	id := g.ids[0]
