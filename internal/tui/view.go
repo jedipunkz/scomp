@@ -17,7 +17,7 @@ const (
 	headerLines = 2 // title + query
 	chromeLines = 4 // top separator, detail separator, bottom separator, help
 	minListH    = 3
-	maxDetailH  = 14
+	maxDetailH  = 16
 	helpText    = "↑↓ move  enter detail  shift+↑↓ j/k scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
 )
 
@@ -49,7 +49,7 @@ func (m Model) detailHeight() int {
 		return 0
 	}
 	h := m.bodyHeight()
-	dh := min(max(h*35/100, 4), maxDetailH)
+	dh := min(max(h*45/100, 4), maxDetailH)
 	if h-dh < minListH {
 		return 0
 	}
