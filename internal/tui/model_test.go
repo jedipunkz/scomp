@@ -146,7 +146,13 @@ func TestFilterKeepsSelection(t *testing.T) {
 }
 
 func TestDetailScrollKeys(t *testing.T) {
-	m := newTestModel(Config{})
+	// Content taller than the pane is needed for scrolling.
+	long := model.Finding{
+		ID:      "LONG-1",
+		Details: strings.Repeat("line\n", 60),
+		Package: model.Package{Name: "pkg"},
+	}
+	m := newTestModel(Config{Findings: []model.Finding{long}})
 	if m.preview.YOffset() != 0 {
 		t.Fatalf("initial YOffset = %d", m.preview.YOffset())
 	}
