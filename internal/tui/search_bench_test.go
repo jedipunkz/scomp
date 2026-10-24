@@ -11,7 +11,7 @@ import (
 // shared by the allocation assert (TestSearch_AllocCount), the fuzz test
 // (FuzzSearchQuery) and the benchmarks (BenchmarkSearch) so all three guard
 // the same data shape.
-func genFindings(n int) ([]model.Finding, []string) {
+func genFindings(n int) ([]model.Finding, []Normalized) {
 	ecosystems := []string{"Go", "npm", "PyPI", "crates.io"}
 	sources := []string{"go.mod", "package-lock.json"}
 	pkgs := []string{
@@ -24,7 +24,7 @@ func genFindings(n int) ([]model.Finding, []string) {
 	}
 	words := []string{"input validation", "crypto", "tls", "buffer overflow", "tls handshake"}
 	fs := make([]model.Finding, 0, n)
-	keys := make([]string, 0, n)
+	keys := make([]Normalized, 0, n)
 	for i := range n {
 		f := model.Finding{
 			ID: fmt.Sprintf("GO-2024-%05d", i+1),
@@ -44,9 +44,9 @@ func genFindings(n int) ([]model.Finding, []string) {
 			FixedVersions: []string{fmt.Sprintf("v%d.%d.%d", 4, 0, i%11)},
 			References:    []string{fmt.Sprintf("https://example.com/advisories/%05d", i+1)},
 		}
-		k, _ := SearchKey(f)
 		fs = append(fs, f)
-		keys = append(keys, k)
+		norm, _ := Normalize(f)
+		keys = append(keys, norm)
 	}
 	return fs, keys
 }

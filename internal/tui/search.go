@@ -48,6 +48,38 @@ func SortFindings(fs []model.Finding) {
 	})
 }
 
+// Normalized is the precomputed lowercase text Search matches a finding
+// against. It is built once per finding (in setFindings) so the per-keystroke
+// hot path does no normalization; match offsets are byte offsets into Key.
+type Normalized struct {
+	Key    string   // lowercased search key
+	Eco    string   // lowercased ecosystem
+	Name   string   // lowercased package name
+	ID     string   // lowercased OSV ID
+	Source string   // lowercased lockfile source
+	CVEs   []string // lowercased CVE IDs
+}
+
+// Normalize lowercases the text of one finding for reuse across keystrokes.
+// The layout for the raw key is returned alongside because highlight() needs
+// the field offsets.
+func Normalize(f model.Finding) (Normalized, keyLayout) {
+	key, l := SearchKey(f)
+	cves := make([]string, len(f.CVEs))
+	for i, c := range f.CVEs {
+		cves[i] = strings.ToLower(c)
+	}
+	n := Normalized{
+		Key:    strings.ToLower(key),
+		Eco:    strings.ToLower(f.Package.Ecosystem),
+		Name:   strings.ToLower(f.Package.Name),
+		ID:     strings.ToLower(f.ID),
+		Source: strings.ToLower(f.Package.Source),
+		CVEs:   cves,
+	}
+	return n, l
+}
+
 // Segment offsets of each field inside a search key.
 type keyLayout struct {
 	name, id, summary int // start offsets; -1 if absent
@@ -209,19 +241,11 @@ func (q *query) add(key, val string) bool {
 	return true
 }
 
-func containsFold(ss []string, sub string) bool {
-	for _, s := range ss {
-		if strings.Contains(strings.ToLower(s), sub) {
-			return true
-		}
-	}
-	return false
-}
-
 // match reports whether the finding satisfies every constraint of the query.
-func (q query) match(f model.Finding, lowerKey string) bool {
+// n carries the precomputed lowercase text of f (see Normalize).
+func (q query) match(f model.Finding, n Normalized) bool {
 	for _, t := range q.terms {
-		if !strings.Contains(lowerKey, t) {
+		if !strings.Contains(n.Key, t) {
 			return false
 		}
 	}
@@ -231,27 +255,35 @@ func (q query) match(f model.Finding, lowerKey string) bool {
 		}
 	}
 	for _, s := range q.eco {
-		if !strings.Contains(strings.ToLower(f.Package.Ecosystem), s) {
+		if !strings.Contains(n.Eco, s) {
 			return false
 		}
 	}
 	for _, s := range q.pkg {
-		if !strings.Contains(strings.ToLower(f.Package.Name), s) {
+		if !strings.Contains(n.Name, s) {
 			return false
 		}
 	}
 	for _, s := range q.id {
-		if !strings.Contains(strings.ToLower(f.ID), s) {
+		if !strings.Contains(n.ID, s) {
 			return false
 		}
 	}
 	for _, s := range q.cve {
-		if !containsFold(f.CVEs, s) {
+		// CVE values are lowercased by parseQuery; n.CVEs by Normalize.
+		matched := false
+		for _, c := range n.CVEs {
+			if strings.Contains(c, s) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
 			return false
 		}
 	}
 	for _, s := range q.src {
-		if !strings.Contains(strings.ToLower(f.Package.Source), s) {
+		if !strings.Contains(n.Source, s) {
 			return false
 		}
 	}
@@ -279,19 +311,19 @@ func termOffsets(key string, terms []string) []int {
 }
 
 // Search filters findings (already sorted with SortFindings) by the Filter,
-// then by the parsed query. Results keep the sorted order.
-func Search(findings []model.Finding, keys []string, queryStr string, f Filter) []Result {
+// then by the parsed query. Results keep the sorted order. norms must hold the
+// Normalized text of each finding, in the same order (see Normalize).
+func Search(findings []model.Finding, norms []Normalized, queryStr string, f Filter) []Result {
 	q := parseQuery(queryStr)
 	var out []Result
 	for i, x := range findings {
 		if !f.match(x) {
 			continue
 		}
-		lower := strings.ToLower(keys[i])
-		if !q.match(x, lower) {
+		if !q.match(x, norms[i]) {
 			continue
 		}
-		out = append(out, Result{Index: i, Matched: termOffsets(lower, q.terms)})
+		out = append(out, Result{Index: i, Matched: termOffsets(norms[i].Key, q.terms)})
 	}
 	return out
 }

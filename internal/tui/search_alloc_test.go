@@ -14,10 +14,10 @@ func TestSearch_AllocCount(t *testing.T) {
 	sizes := []int{1000, 10000}
 	caps := map[string][2]float64{
 		// query name: {n=1000, n=10000}; measured values + ~10% headroom.
-		"empty":  {1111, 11020},
-		"single": {1331, 13216},
-		"multi":  {1103, 11003},
-		"fields": {1382, 13757},
+		"empty":  {11, 20},
+		"single": {231, 2216},
+		"multi":  {4, 4},
+		"fields": {7, 7},
 	}
 	for _, size := range sizes {
 		findings, keys := genFindings(size)

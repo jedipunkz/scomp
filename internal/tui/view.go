@@ -147,10 +147,7 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) headerLine() string {
-	counts := map[model.Severity]int{}
-	for _, f := range m.findings {
-		counts[f.Severity]++
-	}
+	counts := m.sevCounts
 	cnt := func(s model.Severity, label string) string {
 		return severityStyles[s].Render(fmt.Sprintf("%s:%d", label, counts[s]))
 	}
@@ -235,12 +232,7 @@ func (m Model) listLines(w, h int) []string {
 		return center(msg, w, h)
 	}
 
-	nameW, verW, idW := 0, 0, 0
-	for _, f := range m.findings {
-		nameW = max(nameW, ansi.StringWidth(f.Package.Name))
-		verW = max(verW, ansi.StringWidth(f.Package.Version))
-		idW = max(idW, ansi.StringWidth(f.ID))
-	}
+	nameW, verW, idW := m.nameMaxW, m.verMaxW, m.idMaxW
 	// marker(2) + sev(4) + 3 gaps
 	avail := max(0, w-2-4-3*2)
 	nameW = min(nameW, max(8, avail*45/100))

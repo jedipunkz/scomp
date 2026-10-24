@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
@@ -87,9 +88,15 @@ type Model struct {
 	help    help.Model
 
 	findings []model.Finding // sanitized, sorted
-	keys     []string
+	norm     []Normalized    // precomputed lowercase text, same order as findings
 	layouts  []keyLayout
 	ecos     []string
+
+	// per-render aggregates recomputed only when the findings change
+	sevCounts [model.SeverityCritical + 1]int
+	nameMaxW  int
+	verMaxW   int
+	idMaxW    int
 
 	results []Result
 	cursor  int
@@ -209,11 +216,17 @@ func (m *Model) setFindings(fs []model.Finding) {
 		m.findings[i] = model.SanitizeFinding(f)
 	}
 	SortFindings(m.findings)
-	m.keys = make([]string, len(m.findings))
+	m.norm = make([]Normalized, len(m.findings))
 	m.layouts = make([]keyLayout, len(m.findings))
 	ecoSet := map[string]bool{}
 	for i, f := range m.findings {
-		m.keys[i], m.layouts[i] = SearchKey(f)
+		m.norm[i], m.layouts[i] = Normalize(f)
+		if f.Severity <= model.SeverityCritical {
+			m.sevCounts[f.Severity]++
+		}
+		m.nameMaxW = max(m.nameMaxW, ansi.StringWidth(f.Package.Name))
+		m.verMaxW = max(m.verMaxW, ansi.StringWidth(f.Package.Version))
+		m.idMaxW = max(m.idMaxW, ansi.StringWidth(f.ID))
 		if f.Package.Ecosystem != "" {
 			ecoSet[f.Package.Ecosystem] = true
 		}
@@ -250,7 +263,7 @@ func (m *Model) refresh() {
 	if f, ok := m.selected(); ok {
 		selected = f
 	}
-	m.results = Search(m.findings, m.keys, m.input.Value(), m.filter())
+	m.results = Search(m.findings, m.norm, m.input.Value(), m.filter())
 	m.cursor = 0
 	if m.input.Value() == "" && selected >= 0 {
 		// Keep the selection when only filters or data changed.

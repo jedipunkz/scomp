@@ -19,9 +19,9 @@ func FuzzSearchQuery(f *testing.F) {
 	} {
 		f.Add(s)
 	}
-	findings, keys := genFindings(200)
+	findings, norms := genFindings(200)
 	f.Fuzz(func(t *testing.T, query string) {
-		results := Search(findings, keys, query, Filter{})
+		results := Search(findings, norms, query, Filter{})
 		prev := -1
 		// Every term occurrence start offset, for the occurrence check below.
 		starts := map[int]bool{}
@@ -34,7 +34,7 @@ func FuzzSearchQuery(f *testing.F) {
 				t.Fatalf("result index %d not after %d, want strictly increasing order", r.Index, prev)
 			}
 			prev = r.Index
-			key := strings.ToLower(keys[r.Index])
+			key := norms[r.Index].Key
 			for _, off := range r.Matched {
 				if off < 0 || off >= len(key) {
 					t.Fatalf("match offset %d out of range for key %q", off, key)
