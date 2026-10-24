@@ -1,3 +1,5 @@
+// Styles. Text colors follow the gruvbox (dark) palette; the terminal's
+// background is left untouched.
 package tui
 
 import (
@@ -6,20 +8,48 @@ import (
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
+// gruvbox dark palette.
+const (
+	cFg     = "#ebdbb2"
+	cGray   = "#928374"
+	cRed    = "#fb4934"
+	cGreen  = "#b8bb26"
+	cYellow = "#fabd2f"
+	cBlue   = "#83a598"
+	cPurple = "#d3869b"
+	cAqua   = "#8ec07c"
+	cOrange = "#fe8019"
+)
+
 var (
-	styleTitle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	styleDim       = lipgloss.NewStyle().Faint(true)
-	styleBold      = lipgloss.NewStyle().Bold(true)
-	styleSelected  = lipgloss.NewStyle().Bold(true)
-	styleHighlight = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
-	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	styleMarker    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5"))
+	// shared
+	styleTitle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	styleDim       = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color(cGray))
+	styleBold      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cFg))
+	styleHighlight = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color(cRed))
+	styleMarker    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cOrange))
+
+	// list columns
+	stylePackage    = lipgloss.NewStyle().Foreground(lipgloss.Color(cBlue))
+	stylePackageSel = stylePackage.Bold(true)
+	styleVersion    = lipgloss.NewStyle().Foreground(lipgloss.Color(cAqua))
+	styleVersionSel = styleVersion.Bold(true)
+	styleID         = lipgloss.NewStyle().Foreground(lipgloss.Color(cPurple))
+	styleIDSel      = styleID.Bold(true)
+	styleSummary    = lipgloss.NewStyle().Foreground(lipgloss.Color(cGray))
+
+	// detail pane
+	styleDetailID  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	styleDetailAlt = lipgloss.NewStyle().Foreground(lipgloss.Color(cOrange)) // CVE / alias IDs
+	styleFixed     = lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen))
+	styleURL       = lipgloss.NewStyle().Foreground(lipgloss.Color(cBlue))
 
 	severityStyles = map[model.Severity]lipgloss.Style{
-		model.SeverityCritical: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9")),
-		model.SeverityHigh:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
-		model.SeverityMedium:   lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
-		model.SeverityLow:      lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		model.SeverityUnknown:  lipgloss.NewStyle().Faint(true),
+		model.SeverityCritical: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cRed)),
+		model.SeverityHigh:     lipgloss.NewStyle().Foreground(lipgloss.Color(cRed)),
+		model.SeverityMedium:   lipgloss.NewStyle().Foreground(lipgloss.Color(cYellow)),
+		model.SeverityLow:      lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen)),
+		model.SeverityUnknown:  lipgloss.NewStyle().Foreground(lipgloss.Color(cGray)),
 	}
 )
