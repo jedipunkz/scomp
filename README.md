@@ -46,7 +46,7 @@ Flags must come before `path`.
 | `↑` `↓` / `ctrl+p` `ctrl+n` | Move selection |
 | `pgup` `pgdown` | Page through the list |
 | `enter` | Show full-screen detail / go back |
-| `shift+↑` `shift+↓` | Scroll the detail pane |
+| `shift+↑` `shift+↓` / `k` `j` | Scroll the detail pane |
 | `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
 | `ctrl+s` | Cycle severity filter (all → critical → high+ → medium+) |
 | `ctrl+e` | Cycle ecosystem filter |
@@ -68,7 +68,7 @@ fixed:true / fixed:false   only findings with / without a fixed version
 net/http                   free text: matches all of the above fields
 ```
 
-Field terms and free text are ANDed.
+Field terms and free text are ANDed. `j` / `k` scroll the detail pane instead of typing into the query.
 
 ### Cache
 

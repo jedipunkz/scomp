@@ -18,7 +18,7 @@ const (
 	chromeLines = 4 // top separator, detail separator, bottom separator, help
 	minListH    = 3
 	maxDetailH  = 14
-	helpText    = "↑↓ move  enter detail  shift+↑↓ scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
+	helpText    = "↑↓ move  enter detail  shift+↑↓ j/k scroll  ctrl+o open  ctrl+s severity  ctrl+e ecosystem  ctrl+f fixed  ctrl+r rescan  esc quit"
 )
 
 func (m Model) statusLine() string {

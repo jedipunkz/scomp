@@ -106,10 +106,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.detail = !m.detail
 		m.updatePreview()
 		return m, nil
-	case "shift+up":
+	case "shift+up", "k":
 		m.preview.ScrollUp(1)
 		return m, nil
-	case "shift+down":
+	case "shift+down", "j":
 		m.preview.ScrollDown(1)
 		return m, nil
 	case "ctrl+o":
