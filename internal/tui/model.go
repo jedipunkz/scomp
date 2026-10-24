@@ -8,10 +8,12 @@ import (
 	"time"
 	"unicode"
 
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jedipunkz/scomp/internal/model"
@@ -85,6 +87,7 @@ type Model struct {
 	input   textinput.Model
 	preview viewport.Model
 	spin    spinner.Model
+	help    help.Model
 
 	findings []model.Finding // sanitized, sorted
 	keys     []string
@@ -133,9 +136,24 @@ type openedMsg struct{ err error }
 // New builds the TUI model. ctx cancels running scans.
 func New(ctx context.Context, cfg Config) Model {
 	ti := textinput.New()
-	ti.Prompt = "> "
+	ti.Prompt = "❯ "
 	ti.Placeholder = "filter: severity:high eco:go fixed, or free text"
+	ti.CharLimit = 0
+	styles := textinput.DefaultDarkStyles()
+	styles.Focused.Prompt = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	styles.Focused.Placeholder = lipgloss.NewStyle().Foreground(lipgloss.Color(cGray))
+	styles.Cursor.Color = lipgloss.Color(cOrange)
+	styles.Cursor.Shape = tea.CursorBar
+	ti.SetStyles(styles)
 	focusCmd := ti.Focus()
+
+	h := help.New()
+	h.FullSeparator = "  "
+	h.Styles = help.DefaultDarkStyles()
+	h.Styles.ShortKey = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cYellow))
+	h.Styles.ShortDesc = lipgloss.NewStyle().Foreground(lipgloss.Color(cGray))
+	h.Styles.ShortSeparator = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color(cGray))
+	h.Styles.Ellipsis = lipgloss.NewStyle().Foreground(lipgloss.Color(cGray))
 
 	m := Model{
 		focusCmd:   focusCmd,
@@ -144,12 +162,14 @@ func New(ctx context.Context, cfg Config) Model {
 		input:      ti,
 		preview:    viewport.New(),
 		spin:       spinner.New(spinner.WithSpinner(spinner.Dot)),
+		help:       h,
 		status:     cfg.Notice,
 		cachedAt:   cfg.CachedAt,
 		previewFor: previewInvalid,
 		width:      80,
 		height:     24,
 	}
+	m.preview.MouseWheelEnabled = true
 	m.setFindings(cfg.Findings)
 	return m
 }

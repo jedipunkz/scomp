@@ -47,6 +47,7 @@ Flags must come before `path`.
 | `pgup` `pgdown` | Page through the list |
 | `enter` | Show full-screen detail / go back |
 | `shift+↑` `shift+↓` / `k` `j` | Scroll the detail pane |
+| mouse wheel | Scroll the detail pane |
 | `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
 | `ctrl+s` | Cycle severity filter (all → critical → high+ → medium+) |
 | `ctrl+e` | Cycle ecosystem filter |

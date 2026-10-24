@@ -65,7 +65,7 @@ The name comes from the Star Wars scomp link (the connector R2-D2 plugs into ter
 | Purpose | Module | Notes |
 |---|---|---|
 | TUI framework | `charm.land/bubbletea/v2` | v2 moved its import path to a vanity domain. `View()` returns `tea.View` |
-| UI components | `charm.land/bubbles/v2` | Uses `textinput`, `viewport` |
+| UI components | `charm.land/bubbles/v2` | Uses `textinput`, `viewport`, `spinner`, `help` |
 | Styling | `charm.land/lipgloss/v2` | |
 | Vulnerability scanning (lib impl) | `github.com/google/osv-scanner/v2/pkg/osvscanner` | v2.7.0. Requires Go 1.27. `DoScan(ScannerActions)` takes no context |
 | Opening a browser | Standard library + OS-specific command | macOS `open`, Linux `xdg-open` |
@@ -226,9 +226,10 @@ Listing is used only for cache key computation. The actual dependency extraction
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Top: search input (`bubbles/textinput`). Focus is on the input from startup, and typed characters always go into the query.
-- Above: Finding list. Free-text matches are highlighted.
-- Below: detail pane of the selected Finding (`bubbles/viewport`), about 55% of the body height. Scrolled with `shift+↑` `shift+↓` `j` `k`.
+- Top: search input (`bubbles/textinput`), styled prompt and cursor. Focus is on the input from startup, and typed characters always go into the query.
+- Above: Finding list. Free-text matches are highlighted. The selected row is highlighted with the gruvbox `bg1` background across its full width.
+- Below: detail pane of the selected Finding (`bubbles/viewport`), about 55% of the body height. Scrolled with `shift+↑` `shift+↓` `j` `k` and the mouse wheel.
+- The list and detail panes have title bars (`Findings n/m`, `Detail`) rendered with lipgloss; the help bar uses `bubbles/help` with gruvbox styles.
 - `enter` toggles a full-screen detail view. On very short terminals where the list would drop below 3 rows, the pane is hidden and `enter` is the only way to see the detail.
 
 ### 10.2 Key bindings
