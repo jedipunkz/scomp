@@ -85,7 +85,9 @@ jobs:
       - name: Compute totals
         id: totals
         run: |
-          base=$(go tool cover -func="$RUNNER_TEMP/coverage-base.out" | awk '/^total:/ { print substr($3, 1, length($3)-1) }')
+          # cover -func reads function extents from the sources in the current
+          # directory, so the base profile must be read in the base worktree.
+          base=$(cd "$RUNNER_TEMP/base" && go tool cover -func="$RUNNER_TEMP/coverage-base.out" | awk '/^total:/ { print substr($3, 1, length($3)-1) }')
           head=$(go tool cover -func="$RUNNER_TEMP/coverage-head.out" | awk '/^total:/ { print substr($3, 1, length($3)-1) }')
           delta=$(awk -v h="$head" -v b="$base" 'BEGIN { printf "%.1f", h - b }')
           {
