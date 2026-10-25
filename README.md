@@ -37,7 +37,6 @@ Results are cached for `--cache-ttl` (default 24h), keyed by the lockfile paths 
 | Typing / `backspace` | Edit query |
 | `↑` `↓` / `ctrl+p` `ctrl+n` | Move selection |
 | `pgup` `pgdown` | Page through the list |
-| `enter` | Show full-screen detail / go back |
 | `shift+↑` `shift+↓` / `k` `j` | Scroll the detail pane |
 | mouse wheel | Scroll the detail pane |
 | `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
@@ -46,7 +45,7 @@ Results are cached for `--cache-ttl` (default 24h), keyed by the lockfile paths 
 | `ctrl+e` | Cycle ecosystem filter |
 | `ctrl+f` | Toggle showing only findings with a fixed version |
 | `ctrl+r` | Rescan ignoring the cache |
-| `esc` / `ctrl+c` | Quit. In the detail view, `esc` / `q` return to the list |
+| `esc` / `ctrl+c` | Quit |
 
 ### Query
 

@@ -30,7 +30,6 @@ func (helpKeyMap) ShortHelp() []key.Binding {
 	}
 	return []key.Binding{
 		bind("up down", "↑↓", "move"),
-		bind("enter", "enter", "detail"),
 		bind("ctrl+o", "ctrl+o", "open"),
 		bind("ctrl+i", "ctrl+i", "issue"),
 		bind("ctrl+s", "ctrl+s", "sev"),
@@ -48,9 +47,6 @@ func (h helpKeyMap) FullHelp() [][]key.Binding {
 func (m Model) statusLine() string {
 	if m.scanErr != nil {
 		msg := "error: " + firstLine(model.Sanitize(m.scanErr.Error()))
-		if !m.detail {
-			msg += " (enter: details)"
-		}
 		return styleError.Render(msg)
 	}
 	if m.status != "" {
@@ -141,9 +137,6 @@ func (m Model) bodyHeight() int {
 
 // detailHeight is the height of the bottom detail pane; 0 hides it.
 func (m Model) detailHeight() int {
-	if m.detail {
-		return 0
-	}
 	// The list keeps about a third of the window; the detail pane takes the
 	// rest, minus the two title bars between the panes.
 	lh := max(minListH, m.height/3)
@@ -155,9 +148,6 @@ func (m Model) detailHeight() int {
 }
 
 func (m Model) listHeight() int {
-	if m.detail {
-		return 0
-	}
 	dh := m.detailHeight()
 	if dh == 0 {
 		return m.bodyHeight()
@@ -170,14 +160,9 @@ func (m *Model) layout() {
 	filters := m.filterLabel()
 	m.input.SetWidth(max(1, m.width-ansi.StringWidth(m.input.Prompt)-ansi.StringWidth(filters)-2))
 	m.help.SetWidth(max(1, m.width))
-	w, h := max(1, m.width), m.bodyHeight()
-	if !m.detail {
-		h = m.detailHeight()
-		if h == 0 {
-			w, h = 1, 1 // pane hidden
-		}
-	} else {
-		h-- // detail title bar
+	w, h := max(1, m.width), m.detailHeight()
+	if h == 0 {
+		w, h = 1, 1 // pane hidden
 	}
 	m.preview.SetWidth(w)
 	m.preview.SetHeight(h)
@@ -276,12 +261,6 @@ func ago(d time.Duration) string {
 }
 
 func (m Model) bodyLines(w int) []string {
-	h := m.bodyHeight()
-	if m.detail {
-		out := []string{m.detailTitle(w)}
-		return append(out, fitLines(m.preview.View(), w, h-1)...)
-	}
-
 	dh := m.detailHeight()
 	out := []string{m.listTitle(w)}
 	out = append(out, m.listLines(w, m.listHeight())...)
@@ -363,7 +342,7 @@ func (m Model) emptyMessage() []string {
 			styleDim.Render("looked for: " + strings.Join(m.cfg.Lockfiles, ", ")),
 		}
 	case len(m.findings) == 0 && m.scanErr != nil:
-		return []string{styleError.Render("Scan failed"), styleDim.Render("press enter for details, ctrl+r to retry")}
+		return []string{styleError.Render("Scan failed"), styleDim.Render("ctrl+r to retry")}
 	case len(m.findings) == 0:
 		return []string{"No known vulnerabilities"}
 	case len(m.results) == 0:
