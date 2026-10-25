@@ -49,6 +49,7 @@ Flags must come before `path`.
 | `shift+↑` `shift+↓` / `k` `j` | Scroll the detail pane |
 | mouse wheel | Scroll the detail pane |
 | `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
+| `ctrl+i` | Create a GitHub issue for the selected finding (requires `gh`, see below) |
 | `ctrl+s` | Cycle severity filter (all → critical → high+ → medium+) |
 | `ctrl+e` | Cycle ecosystem filter |
 | `ctrl+f` | Toggle showing only findings with a fixed version |
@@ -70,6 +71,21 @@ net/http                   free text: matches all of the above fields
 ```
 
 Field terms and free text are ANDed. `j` / `k` scroll the detail pane instead of typing into the query.
+
+### GitHub issues
+
+`ctrl+i` on a finding creates a GitHub issue for it with the `gh` CLI. Requirements:
+
+- `gh` installed and authenticated (`gh auth login`)
+- the scan target is a git repository with a GitHub remote
+
+The title and body are rendered from the template embedded in the binary ([`internal/issues/issue.tmpl`](internal/issues/issue.tmpl)), not from the repository's own `.github/ISSUE_TEMPLATE`. The flow:
+
+1. scomp searches the repository's issues (all states) for the OSV ID and package name in the title.
+2. None found: `y` creates the issue, `c` cancels.
+3. One or more found: `o` overrides the newest one (rewrites its title and body; a closed issue stays closed), `d` creates a duplicate, `c` cancels.
+
+On legacy terminals `ctrl+i` arrives as `tab`; both work.
 
 ### Cache
 

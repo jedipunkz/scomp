@@ -19,6 +19,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/jedipunkz/scomp/internal/cache"
+	"github.com/jedipunkz/scomp/internal/issues"
 	"github.com/jedipunkz/scomp/internal/model"
 	"github.com/jedipunkz/scomp/internal/repo"
 	"github.com/jedipunkz/scomp/internal/scanner"
@@ -146,6 +147,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	ghc := issues.Client{Dir: root, Scomp: strings.TrimPrefix(versionString(), "v")}
+
 	if o.json {
 		return runJSON(ctx, sc, root, cached, save, stdout, stderr)
 	}
@@ -162,8 +165,21 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			}
 			return fs, err
 		},
-		OnScanned:   save,
-		OpenURL:     openBrowser,
+		OnScanned: save,
+		OpenURL:   openBrowser,
+		SearchIssues: func(ctx context.Context, f model.Finding) ([]tui.ExistingIssue, error) {
+			ms, err := ghc.Search(ctx, f)
+			if err != nil {
+				return nil, err
+			}
+			issues := make([]tui.ExistingIssue, len(ms))
+			for i, m := range ms {
+				issues[i] = tui.ExistingIssue{Number: m.Number, Title: m.Title, State: m.State, URL: m.URL}
+			}
+			return issues, nil
+		},
+		CreateIssue: ghc.Create,
+		EditIssue:   ghc.Edit,
 		ScanOnStart: cached == nil,
 	}
 	if cached != nil {

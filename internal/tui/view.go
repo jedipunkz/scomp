@@ -30,11 +30,11 @@ func (helpKeyMap) ShortHelp() []key.Binding {
 	}
 	return []key.Binding{
 		bind("up down", "↑↓", "move"),
-		bind("j k", "j/k", "scroll"),
 		bind("enter", "enter", "detail"),
 		bind("ctrl+o", "ctrl+o", "open"),
-		bind("ctrl+s", "ctrl+s", "severity"),
-		bind("ctrl+e", "ctrl+e", "ecosystem"),
+		bind("ctrl+i", "ctrl+i", "issue"),
+		bind("ctrl+s", "ctrl+s", "sev"),
+		bind("ctrl+e", "ctrl+e", "eco"),
 		bind("ctrl+f", "ctrl+f", "fixed"),
 		bind("ctrl+r", "ctrl+r", "rescan"),
 		bind("esc", "esc", "quit"),
@@ -46,6 +46,9 @@ func (h helpKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (m Model) statusLine() string {
+	if s := m.issuePrompt(); s != "" {
+		return s
+	}
 	if m.scanErr != nil {
 		msg := "error: " + firstLine(model.Sanitize(m.scanErr.Error()))
 		if !m.detail {
@@ -57,6 +60,22 @@ func (m Model) statusLine() string {
 		return styleDim.Render(model.Sanitize(m.status))
 	}
 	return ""
+}
+
+// issuePrompt renders the interactive prompt line of the GitHub issue flow;
+// empty when no prompt is open. It takes over the status line.
+func (m Model) issuePrompt() string {
+	switch m.issueState {
+	case issueConfirm:
+		return styleBold.Render(fmt.Sprintf("create GitHub issue for %s? ", m.issueFinding.ID)) +
+			"y: create   c: cancel"
+	case issueChoose:
+		e := m.issueFound[0]
+		return styleBold.Render(fmt.Sprintf("issue #%d [%s] exists: ", e.Number, e.State)) +
+			"o: override   d: duplicate   c: cancel"
+	default:
+		return ""
+	}
 }
 
 func (m Model) bodyHeight() int {
