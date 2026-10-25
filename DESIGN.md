@@ -68,7 +68,7 @@ The name comes from the Star Wars scomp link (the connector R2-D2 plugs into ter
 | UI components | `charm.land/bubbles/v2` | Uses `textinput`, `viewport`, `spinner`, `help` |
 | Styling | `charm.land/lipgloss/v2` | |
 | Vulnerability scanning (lib impl) | `github.com/google/osv-scanner/v2/pkg/osvscanner` | v2.7.0. Requires Go 1.27. `DoScan(ScannerActions)` takes no context |
-| Opening a browser | Standard library + OS-specific command | macOS `open`, Linux `xdg-open` |
+| Opening a browser | Standard library + OS-specific command | macOS `open`, Linux `xdg-open` (WSL: `wslview` or `cmd.exe`) |
 
 External commands (exec impl only): `osv-scanner` (v2), `git`.
 

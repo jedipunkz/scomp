@@ -248,11 +248,13 @@ func runJSON(ctx context.Context, sc scanner.Scanner, root string, cached *cache
 
 func openBrowser(url string) error {
 	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
+	switch {
+	case runtime.GOOS == "darwin":
 		cmd = exec.Command("open", url)
-	case "windows":
+	case runtime.GOOS == "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case inWSL(os.Getenv, procVersion):
+		cmd = wslOpen(url)
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}
@@ -262,6 +264,33 @@ func openBrowser(url string) error {
 	}
 	go cmd.Wait() //nolint:errcheck // reap the child; its exit status is not actionable
 	return nil
+}
+
+// procVersion is the path checked for a WSL kernel signature.
+const procVersion = "/proc/version"
+
+// inWSL reports whether the process runs inside WSL: WSL_DISTRO_NAME is set
+// on WSL2, and /proc/version mentions Microsoft on both WSL1 and WSL2.
+func inWSL(getenv func(string) string, procVersionPath string) bool {
+	if getenv("WSL_DISTRO_NAME") != "" {
+		return true
+	}
+	b, err := os.ReadFile(procVersionPath)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(b)), "microsoft")
+}
+
+// wslOpen builds the command that opens url with the Windows-side browser.
+// wslview (from wslu) is preferred; cmd.exe start is the fallback when wslu
+// is not installed. cmd.exe is unavailable when WSL interop is disabled, and
+// openBrowser reports the Start error through the TUI status line.
+func wslOpen(url string) *exec.Cmd {
+	if _, err := exec.LookPath("wslview"); err == nil {
+		return exec.Command("wslview", url)
+	}
+	return exec.Command("cmd.exe", "/c", "start", "", url)
 }
 
 func versionString() string {
