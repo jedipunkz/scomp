@@ -24,6 +24,10 @@ import (
 // defaultBin is the gh binary; tests override Bin.
 const defaultBin = "gh"
 
+// securityLabel is the GitHub label applied to issues scomp creates. It is
+// created on demand when the repository does not have it yet.
+const securityLabel = "security"
+
 // Client runs gh against the git repository at Dir. The GitHub repository is
 // derived from the git remotes there, like plain gh usage.
 type Client struct {
@@ -60,17 +64,50 @@ func (c Client) Search(ctx context.Context, f model.Finding) ([]Issue, error) {
 	return issues, nil
 }
 
-// Create opens a new GitHub issue for the finding and returns its URL.
+// Create opens a new GitHub issue for the finding and returns its URL. The
+// issue carries the security label; ensureLabel creates that label when the
+// repository does not have it yet.
 func (c Client) Create(ctx context.Context, f model.Finding) (string, error) {
+	if err := c.ensureLabel(ctx); err != nil {
+		return "", err
+	}
 	title, body, err := render(f, c.Scomp)
 	if err != nil {
 		return "", fmt.Errorf("render issue: %w", err)
 	}
-	out, _, err := c.run(ctx, "issue", "create", "--title", title, "--body", body)
+	out, _, err := c.run(ctx, "issue", "create", "--title", title, "--body", body,
+		"--label", securityLabel)
 	if err != nil {
 		return "", err
 	}
 	return issueURL(out)
+}
+
+// ensureLabel creates the security label unless the repository already has
+// one. gh label list --search also matches descriptions, so the exact name is
+// checked here.
+func (c Client) ensureLabel(ctx context.Context) error {
+	out, _, err := c.run(ctx, "label", "list", "--search", securityLabel,
+		"--json", "name", "--limit", "100")
+	if err != nil {
+		return err
+	}
+	var labels []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(out, &labels); err != nil {
+		return fmt.Errorf("gh label list: unexpected output: %w", err)
+	}
+	for _, l := range labels {
+		if l.Name == securityLabel {
+			return nil
+		}
+	}
+	if _, _, err := c.run(ctx, "label", "create", securityLabel,
+		"--color", "d73a4a", "--description", "Security vulnerabilities found by scomp"); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Edit overrides the title and body of an existing issue with a fresh render

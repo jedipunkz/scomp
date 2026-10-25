@@ -70,7 +70,7 @@ Field terms and free text are ANDed. `j` / `k` scroll the detail pane instead of
 
 `ctrl+i` on a finding searches the repository's GitHub issues for it and asks in a popup: with no existing issue, `y` creates it and `c` cancels; with one, `o` overrides it (rewrites its title and body), `d` creates a duplicate, `c` cancels.
 
-Requires `gh` installed and authenticated (`gh auth login`) and a GitHub remote in the scan target. The title and body come from a template embedded in the binary ([`internal/issues/issue.tmpl`](internal/issues/issue.tmpl)); the scan target's own issue templates are not used.
+Requires `gh` installed and authenticated (`gh auth login`) and a GitHub remote in the scan target. Created issues carry the `security` label; the label is created on demand when the repository does not have it yet (fails if the token lacks the permission). The title and body come from a template embedded in the binary ([`internal/issues/issue.tmpl`](internal/issues/issue.tmpl)); the scan target's own issue templates are not used.
 
 ## Privacy
 
