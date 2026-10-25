@@ -17,18 +17,39 @@ import (
 // and the log path.
 func fakeGh(t *testing.T, out string) (bin, log string) {
 	t.Helper()
+	return fakeGhOuts(t, map[string]string{"": out})
+}
+
+// fakeGhOuts is fakeGh with one output per gh subcommand: the map key matches
+// the script's $1 and the "" key is the default for every other subcommand.
+func fakeGhOuts(t *testing.T, outs map[string]string) (bin, log string) {
+	t.Helper()
 	dir := t.TempDir()
-	outPath := filepath.Join(dir, "out.txt")
-	if err := os.WriteFile(outPath, []byte(out), 0o600); err != nil {
+	def := outs[""]
+	defPath := filepath.Join(dir, "out.txt")
+	if err := os.WriteFile(defPath, []byte(def), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	logPath := filepath.Join(dir, "args.log")
-	script := "#!/bin/sh\n" +
-		"printf '%s\\n' \"$(pwd)\" >> " + strconv.Quote(logPath) + "\n" +
-		"printf '%s\\n' \"$*\" >> " + strconv.Quote(logPath) + "\n" +
-		"cat " + strconv.Quote(outPath) + "\n"
+	var script strings.Builder
+	script.WriteString("#!/bin/sh\n")
+	script.WriteString("printf '%s\\n' \"$(pwd)\" >> " + strconv.Quote(logPath) + "\n")
+	script.WriteString("printf '%s\\n' \"$*\" >> " + strconv.Quote(logPath) + "\n")
+	script.WriteString("case $1 in\n")
+	for sub, out := range outs {
+		if sub == "" {
+			continue
+		}
+		path := filepath.Join(dir, "out-"+sub+".txt")
+		if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		script.WriteString(sub + ") cat " + strconv.Quote(path) + " ;;\n")
+	}
+	script.WriteString("*) cat " + strconv.Quote(defPath) + " ;;\n")
+	script.WriteString("esac\n")
 	binPath := filepath.Join(dir, "gh")
-	if err := os.WriteFile(binPath, []byte(script), 0o700); err != nil {
+	if err := os.WriteFile(binPath, []byte(script.String()), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return binPath, logPath
@@ -109,14 +130,25 @@ func TestSearchBadJSON(t *testing.T) {
 func TestCreateAndEdit(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
+		outs   map[string]string
 		args   []string
 		create bool
 	}{
-		{name: "create", create: true, args: []string{"issue", "create"}},
-		{name: "edit", args: []string{"issue", "edit", "12"}},
+		{
+			// The security label already exists, so Create only lists labels.
+			name:   "create",
+			create: true,
+			outs:   map[string]string{"label": `[{"name":"security"}]`, "": "\nhttps://github.com/o/r/issues/9\n"},
+			args:   []string{"issue", "create", "--label security"},
+		},
+		{
+			name: "edit",
+			outs: map[string]string{"": "\nhttps://github.com/o/r/issues/9\n"},
+			args: []string{"issue", "edit", "12"},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			bin, log := fakeGh(t, "\nhttps://github.com/o/r/issues/9\n")
+			bin, log := fakeGhOuts(t, tc.outs)
 			c := Client{Bin: bin, Scomp: "1.2.3"}
 			ctx := context.Background()
 			f := testFinding()
@@ -163,6 +195,67 @@ func TestCreateAndEdit(t *testing.T) {
 	}
 }
 
+func TestCreateAddsSecurityLabel(t *testing.T) {
+	// No security label in the repository: it is created before the issue.
+	bin, log := fakeGhOuts(t, map[string]string{
+		"label": "[]",
+		"":      "\nhttps://github.com/o/r/issues/9\n",
+	})
+	url, err := (Client{Bin: bin}).Create(context.Background(), testFinding())
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if url != "https://github.com/o/r/issues/9" {
+		t.Errorf("url = %q", url)
+	}
+	logged := readLog(t, log)
+	for _, want := range []string{
+		"label list --search security --json name --limit 100",
+		"label create security --color d73a4a --description Security vulnerabilities found by scomp",
+		"issue create --title [security] GO-2024-2687: golang.org/x/net 0.12.0 --body",
+		"--label security",
+	} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("args missing %q:\n%s", want, logged)
+		}
+	}
+}
+
+func TestCreateKeepsExistingLabel(t *testing.T) {
+	// The security label exists: Create must not touch label create.
+	bin, log := fakeGhOuts(t, map[string]string{
+		"label": `[{"name":"security"}]`,
+		"":      "\nhttps://github.com/o/r/issues/9\n",
+	})
+	_, err := (Client{Bin: bin}).Create(context.Background(), testFinding())
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	logged := readLog(t, log)
+	if strings.Contains(logged, "label create") {
+		t.Errorf("label create must not run for an existing label:\n%s", logged)
+	}
+}
+
+func TestCreateAbortsWhenLabelListFails(t *testing.T) {
+	// A failing gh label list must abort the create; the issue is not made.
+	dir := t.TempDir()
+	log := filepath.Join(dir, "args.log")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + strconv.Quote(log) + "\n" +
+		"echo 'not a GitHub repository' >&2\nexit 1\n"
+	bin := filepath.Join(dir, "gh")
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (Client{Bin: bin}).Create(context.Background(), testFinding())
+	if err == nil || !strings.Contains(err.Error(), "gh label list: not a GitHub repository") {
+		t.Errorf("got %v, want gh label list error", err)
+	}
+	if got := readLog(t, log); strings.Contains(got, "issue create") {
+		t.Errorf("issue create must not run when the label list fails:\n%s", got)
+	}
+}
+
 func TestRenderMinimalFinding(t *testing.T) {
 	title, body, err := render(model.Finding{ID: "GO-1", Package: model.Package{Name: "npm/pkg", Version: "1.0.0", Ecosystem: "npm"}}, "dev")
 	if err != nil {
@@ -206,7 +299,11 @@ func TestGHExitError(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := filepath.Join(dir, "args.log")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + strconv.Quote(log) + "\necho 'none of the git remotes point to a GitHub repository' >&2\nexit 1\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + strconv.Quote(log) + "\n" +
+		"case \"$1 $2\" in\n" +
+		"\"label list\") echo '[]' ;;\n" +
+		"\"issue create\") echo 'none of the git remotes point to a GitHub repository' >&2\nexit 1 ;;\n" +
+		"esac\n"
 	bin := filepath.Join(dir, "gh")
 	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
