@@ -24,14 +24,23 @@ type osvOutput struct {
 				Version   string `json:"version"`
 				Ecosystem string `json:"ecosystem"`
 			} `json:"package"`
-			Groups []struct {
-				IDs         []string `json:"ids"`
-				Aliases     []string `json:"aliases"`
-				MaxSeverity string   `json:"max_severity"`
-			} `json:"groups"`
-			Vulnerabilities []osvVuln `json:"vulnerabilities"`
+			Groups          []osvGroup `json:"groups"`
+			Vulnerabilities []osvVuln  `json:"vulnerabilities"`
 		} `json:"packages"`
 	} `json:"results"`
+}
+
+type osvGroup struct {
+	IDs     []string `json:"ids"`
+	Aliases []string `json:"aliases"`
+	// Analysis results such as Go call analysis, keyed by vulnerability ID.
+	// Mirror of osv-scanner's models.GroupInfo.ExperimentalAnalysis.
+	ExperimentalAnalysis map[string]osvAnalysis `json:"experimental_analysis"`
+	MaxSeverity          string                 `json:"max_severity"`
+}
+
+type osvAnalysis struct {
+	Called bool `json:"called"`
 }
 
 type osvVuln struct {
@@ -94,9 +103,21 @@ func Parse(data []byte, root string) ([]model.Finding, error) {
 
 			groups := make([]group, 0, len(p.Groups))
 			for _, g := range p.Groups {
+				if !groupCalled(g) {
+					// Mirror osv-scanner's CLI default, which hides groups
+					// the analysis (Go call analysis) determined unreachable
+					// unless --all-vulns is passed. Without this filter an
+					// unimported advisory such as GO-2026-5932 (the
+					// x/crypto/openpgp package, not imported by anything)
+					// surfaces as a false positive.
+					continue
+				}
 				groups = append(groups, group{ids: g.IDs, aliases: g.Aliases, maxSeverity: g.MaxSeverity})
 			}
-			if len(groups) == 0 {
+			if len(p.Groups) == 0 {
+				// No groups in the output at all: fall back to one finding
+				// per vulnerability. A non-empty Groups list that lost all
+				// entries to the uncalled filter above must stay empty.
 				for _, v := range p.Vulnerabilities {
 					groups = append(groups, group{ids: []string{v.ID}})
 				}
@@ -117,6 +138,21 @@ func Parse(data []byte, root string) ([]model.Finding, error) {
 		}
 	}
 	return findings, nil
+}
+
+// groupCalled mirrors osv-scanner's models.GroupInfo.IsCalled: a group counts
+// as called when no analysis was performed (including ecosystems without
+// call analysis), or when any performed analysis reports it called.
+func groupCalled(g osvGroup) bool {
+	if len(g.ExperimentalAnalysis) == 0 {
+		return true
+	}
+	for _, a := range g.ExperimentalAnalysis {
+		if a.Called {
+			return true
+		}
+	}
+	return false
 }
 
 func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.Finding, bool) {

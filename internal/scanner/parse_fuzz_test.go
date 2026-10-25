@@ -13,6 +13,7 @@ func seedCorpus(t *testing.F) {
 	t.Add([]byte(`{}`))
 	t.Add([]byte(`{"results":[]}`))
 	t.Add([]byte(`{"results":[{"source":{"path":"go.mod"},"packages":[{"package":{"name":"golang.org/x/net","version":"0.17.0","ecosystem":"Go"},"groups":[{"ids":["GO-2024-2687"],"max_severity":"7.5"}]}]}]}`))
+	t.Add([]byte(`{"results":[{"source":{"path":"go.mod"},"packages":[{"package":{"name":"a","version":"1","ecosystem":"Go"},"groups":[{"ids":["GO-1"],"experimental_analysis":{"GO-1":{"called":false}}},{"ids":["GO-2"],"experimental_analysis":{"GO-2":{"called":true}}}],"vulnerabilities":[{"id":"GO-1"},{"id":"GO-2"}]}]}]}`))
 	sample, err := os.ReadFile("../../testdata/osv-scanner-v2.json")
 	if err != nil {
 		panic(err)

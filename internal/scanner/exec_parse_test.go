@@ -146,6 +146,68 @@ func TestParseEdgeCases(t *testing.T) {
 	}
 }
 
+func TestParseSkipsUncalledGroups(t *testing.T) {
+	// osv-scanner's JSON output contains every vulnerability it matched,
+	// including ones its analysis (Go call analysis) determined unreachable;
+	// the CLI hides those by default. scomp must hide them too, or scanning
+	// reports advisories for packages nothing imports (false positives such
+	// as GO-2026-5932, the unmaintained x/crypto/openpgp package).
+	tests := []struct {
+		name    string
+		groups  string
+		vulns   string
+		wantIDs []string
+	}{
+		{
+			name:    "uncalled group is dropped",
+			groups:  `{"ids":["GO-1"],"experimental_analysis":{"GO-1":{"called":false}}},{"ids":["GO-2"]}`,
+			vulns:   `[{"id":"GO-1"},{"id":"GO-2"}]`,
+			wantIDs: []string{"GO-2"},
+		},
+		{
+			name:    "called group is kept",
+			groups:  `{"ids":["GO-1"],"experimental_analysis":{"GO-1":{"called":true}}},{"ids":["GO-2"]}`,
+			vulns:   `[{"id":"GO-1"},{"id":"GO-2"}]`,
+			wantIDs: []string{"GO-1", "GO-2"},
+		},
+		{
+			name:    "group without analysis is kept",
+			groups:  `{"ids":["GO-1"]},{"ids":["GO-2"]}`,
+			vulns:   `[{"id":"GO-1"},{"id":"GO-2"}]`,
+			wantIDs: []string{"GO-1", "GO-2"},
+		},
+		{
+			name:    "all groups uncalled stays empty",
+			groups:  `{"ids":["GO-1"],"experimental_analysis":{"GO-1":{"called":false}}}`,
+			vulns:   `[{"id":"GO-1"}]`,
+			wantIDs: []string{},
+		},
+		{
+			name:    "group with any called ID is kept",
+			groups:  `{"ids":["GO-1","GO-3"],"experimental_analysis":{"GO-1":{"called":false},"GO-3":{"called":true}}},{"ids":["GO-2"]}`,
+			vulns:   `[{"id":"GO-1"},{"id":"GO-3"},{"id":"GO-2"}]`,
+			wantIDs: []string{"GO-1", "GO-2"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := `{"results":[{"source":{"path":"/r/go.mod"},"packages":[{"package":{"name":"a","version":"1","ecosystem":"Go"},
+				"groups":[` + tt.groups + `],"vulnerabilities":` + tt.vulns + `}]}]}`
+			got, err := Parse([]byte(in), "/r")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := []string{}
+			for _, f := range got {
+				ids = append(ids, f.ID)
+			}
+			if !slices.Equal(ids, tt.wantIDs) {
+				t.Errorf("IDs = %v, want %v", ids, tt.wantIDs)
+			}
+		})
+	}
+}
+
 func TestParseSeverityLabelFallback(t *testing.T) {
 	in := `{"results":[{"source":{"path":"/r/go.mod"},"packages":[{"package":{"name":"a","version":"1","ecosystem":"Go"},
 		"groups":[{"ids":["GHSA-x"],"max_severity":""}],"vulnerabilities":[{"id":"GHSA-x","database_specific":{"severity":"MODERATE"}}]}]}]}`
