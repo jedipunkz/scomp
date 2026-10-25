@@ -50,6 +50,12 @@ var (
 	styleFixed     = lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen))
 	styleURL       = lipgloss.NewStyle().Foreground(lipgloss.Color(cBlue))
 
+	// GitHub issue popup
+	styleModalBox = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(cGray)).
+			Padding(1, 2)
+
 	severityStyles = map[model.Severity]lipgloss.Style{
 		model.SeverityCritical: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cRed)),
 		model.SeverityHigh:     lipgloss.NewStyle().Foreground(lipgloss.Color(cRed)),

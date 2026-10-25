@@ -321,6 +321,12 @@ func (m *Model) handleIssuesSearched(msg issuesSearchedMsg) (tea.Model, tea.Cmd)
 	case len(msg.issues) == 0:
 		m.issueState = issueConfirm
 	default:
+		// gh output is external data; sanitize before it reaches the popup.
+		for i := range msg.issues {
+			msg.issues[i].Title = model.Sanitize(msg.issues[i].Title)
+			msg.issues[i].State = model.Sanitize(msg.issues[i].State)
+			msg.issues[i].URL = model.Sanitize(msg.issues[i].URL)
+		}
 		m.issueState = issueChoose
 		m.issueFound = msg.issues
 	}

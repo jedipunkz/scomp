@@ -5,8 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/jedipunkz/scomp/internal/model"
 )
+
+// plainView is the rendered view with all styling stripped, for text
+// assertions on styled content.
+func plainView(m Model) string {
+	return ansi.Strip(m.View().Content)
+}
 
 // issueCfg wires callbacks capturing what the flow did. search returns
 // found and searchErr for every call.
@@ -51,8 +59,9 @@ func TestIssueConfirmCreates(t *testing.T) {
 	if len(*searched) != 1 || (*searched)[0].ID != "GO-1" {
 		t.Fatalf("searched = %+v, want GO-1", *searched)
 	}
-	if v := m.View().Content; !strings.Contains(v, "create GitHub issue for GO-1?") || !strings.Contains(v, "y: create") || !strings.Contains(v, "c: cancel") {
-		t.Errorf("confirm prompt not shown:\n%s", v)
+	if v := plainView(m); !strings.Contains(v, "GO-1") || !strings.Contains(v, "Create a GitHub issue for this finding?") ||
+		!strings.Contains(v, "y create") || !strings.Contains(v, "c cancel") {
+		t.Errorf("confirm popup not shown:\n%s", v)
 	}
 	m, cmd := send(t, m, press("y"))
 	if cmd == nil || m.issueState != issueRunning {
@@ -81,6 +90,9 @@ func TestIssueConfirmCancels(t *testing.T) {
 		if len(*created) != 0 {
 			t.Errorf("%s: created %+v", key, *created)
 		}
+		if v := m.View().Content; !strings.Contains(v, "Findings") {
+			t.Errorf("%s: normal view not restored:\n%s", key, v)
+		}
 	}
 }
 
@@ -93,8 +105,9 @@ func TestIssueChooseOverride(t *testing.T) {
 	if m.issueState != issueChoose {
 		t.Fatalf("state = %v, want choose", m.issueState)
 	}
-	if v := m.View().Content; !strings.Contains(v, "issue #12 [open] exists:") || !strings.Contains(v, "o: override") || !strings.Contains(v, "d: duplicate") {
-		t.Errorf("choose prompt not shown:\n%s", v)
+	if v := plainView(m); !strings.Contains(v, "issue #12 [open]: old title") || !strings.Contains(v, "Override it, or create a duplicate?") ||
+		!strings.Contains(v, "o override") || !strings.Contains(v, "d duplicate") || !strings.Contains(v, "c cancel") {
+		t.Errorf("choose popup not shown:\n%s", v)
 	}
 	m, cmd := send(t, m, press("o"))
 	if cmd == nil || m.issueState != issueRunning {
@@ -149,6 +162,15 @@ func TestIssueChooseSwallowsOtherKeys(t *testing.T) {
 	}
 	if len(*created) != 0 || len(*edited) != 0 {
 		t.Errorf("created=%v edited=%v, want none", *created, *edited)
+	}
+}
+
+func TestIssuePopupSanitizesTitles(t *testing.T) {
+	cfg, _, _, _ := issueCfg(
+		[]ExistingIssue{{Number: 3, Title: "bad\x1b[31mtitle", State: "open", URL: "https://github.com/o/r/issues/3"}}, nil)
+	m := openPrompt(t, newTestModel(cfg))
+	if v := plainView(m); !strings.Contains(v, "badtitle") {
+		t.Errorf("gh-provided title must be sanitized:\n%s", v)
 	}
 }
 

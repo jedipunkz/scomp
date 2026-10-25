@@ -82,10 +82,10 @@ Field terms and free text are ANDed. `j` / `k` scroll the detail pane instead of
 The title and body are rendered from the template embedded in the binary ([`internal/issues/issue.tmpl`](internal/issues/issue.tmpl)), not from the repository's own `.github/ISSUE_TEMPLATE`. The flow:
 
 1. scomp searches the repository's issues (all states) for the OSV ID and package name in the title.
-2. None found: `y` creates the issue, `c` cancels.
-3. One or more found: `o` overrides the newest one (rewrites its title and body; a closed issue stays closed), `d` creates a duplicate, `c` cancels.
+2. None found: a popup asks — `y` creates the issue, `c` cancels.
+3. One or more found: the popup shows the newest one (number, state, title) — `o` overrides it (rewrites its title and body; a closed issue stays closed), `d` creates a duplicate, `c` cancels.
 
-On legacy terminals `ctrl+i` arrives as `tab`; both work.
+While the popup is open, all other keys are ignored; `esc` closes it. On legacy terminals `ctrl+i` arrives as `tab`; both work.
 
 ### Cache
 
