@@ -2,6 +2,10 @@
 
 scomp lists known vulnerabilities in the dependencies of the current Git repository and lets you browse and filter them in a TUI. It reads the repository's lockfiles with an embedded [osv-scanner](https://github.com/google/osv-scanner) and shows one row per package × vulnerability (OSV ID, with CVE IDs alongside).
 
+![scomp TUI demo](demo.gif)
+
+<!-- demo.gif is recorded with [vhs](https://github.com/charmbracelet/vhs): `make build && vhs demo.tape` -->
+
 ## Install
 
 ```sh
