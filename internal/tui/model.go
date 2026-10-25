@@ -122,7 +122,6 @@ type Model struct {
 	cachedAt    time.Time
 	status      string
 
-	detail bool // full-screen detail
 	width  int
 	height int
 
@@ -368,7 +367,7 @@ func (m *Model) clampOffset() {
 func (m *Model) updatePreview() {
 	m.layout()
 	idx, _ := m.selected()
-	showErr := m.detail && m.scanErr != nil
+	showErr := m.scanErr != nil
 	w := m.preview.Width()
 	if idx == m.previewFor && w == m.previewWidth && showErr == m.previewErr {
 		return

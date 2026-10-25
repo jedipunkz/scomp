@@ -103,18 +103,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.String() {
 	case "esc", "ctrl+c":
-		if m.detail {
-			return m.backToList()
-		}
 		if m.cancelScan != nil {
 			m.cancelScan()
 		}
 		return m, tea.Quit
-	case "q":
-		if m.detail {
-			return m.backToList()
-		}
-		return m.editInput(msg)
 	case "up", "ctrl+p":
 		m.moveCursor(-1)
 		return m, nil
@@ -126,10 +118,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "pgdown":
 		m.moveCursor(max(1, m.listHeight()))
-		return m, nil
-	case "enter":
-		m.detail = !m.detail
-		m.updatePreview()
 		return m, nil
 	case "shift+up", "k":
 		m.preview.ScrollUp(1)
@@ -175,14 +163,6 @@ func (m Model) editInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.refresh()
 	}
 	return m, cmd
-}
-
-// backToList leaves the full-screen detail view.
-func (m Model) backToList() (tea.Model, tea.Cmd) {
-	m.detail = false
-	m.clampOffset()
-	m.updatePreview()
-	return m, nil
 }
 
 func (m Model) openSelected() tea.Cmd {

@@ -76,7 +76,7 @@ func selectedID(m Model) string {
 
 func TestKeyStrings(t *testing.T) {
 	// Guard the key names handleKey switches on.
-	for _, s := range []string{"up", "down", "enter", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k", "q"} {
+	for _, s := range []string{"up", "down", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k"} {
 		if got := press(s).String(); got != s {
 			t.Errorf("press(%q).String() = %q", s, got)
 		}
@@ -172,34 +172,11 @@ func TestDetailScrollKeys(t *testing.T) {
 	}
 }
 
-func TestDetailBackKeys(t *testing.T) {
+func TestQTypesIntoQuery(t *testing.T) {
 	m := newTestModel(Config{})
-	m, _ = send(t, m, press("enter"))
-	if !m.detail {
-		t.Fatal("enter must show detail")
-	}
-	m, cmd := send(t, m, press("q"))
-	if m.detail {
-		t.Error("q must return to the list")
-	}
-	if cmd != nil {
-		t.Error("q must not quit from the detail view")
-	}
-	m, _ = send(t, m, press("enter"))
-	m, _ = send(t, m, press("esc"))
-	if m.detail {
-		t.Error("esc must return to the list")
-	}
-	_, cmd = send(t, m, press("esc"))
-	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Error("esc on the list must quit")
-	}
-
-	// On the list, q goes into the query instead.
-	m = newTestModel(Config{})
 	m, _ = send(t, m, press("q"))
-	if m.input.Value() != "q" || m.detail {
-		t.Errorf("query = %q, detail = %v; want q, false", m.input.Value(), m.detail)
+	if m.input.Value() != "q" {
+		t.Errorf("query = %q, want q", m.input.Value())
 	}
 }
 
@@ -260,9 +237,8 @@ func TestScanErrorKeepsCachedList(t *testing.T) {
 	if !strings.Contains(v, "error: boom") {
 		t.Error("error must be shown in status line")
 	}
-	m, _ = send(t, m, press("enter"))
-	if !strings.Contains(m.View().Content, "full stderr text") {
-		t.Error("detail view must show full stderr")
+	if !strings.Contains(v, "full stderr text") {
+		t.Error("detail pane must show full stderr")
 	}
 }
 
@@ -310,7 +286,7 @@ func TestOpenURL(t *testing.T) {
 	}
 }
 
-func TestDetailPaneAndToggle(t *testing.T) {
+func TestDetailPane(t *testing.T) {
 	m := newTestModel(Config{})
 	v := m.View().Content
 	if !strings.Contains(v, "Ecosystem :") {
@@ -318,14 +294,6 @@ func TestDetailPaneAndToggle(t *testing.T) {
 	}
 	if !strings.Contains(v, "GHSA-1") {
 		t.Error("detail pane must show the selected finding's ID")
-	}
-	m, _ = send(t, m, press("enter"))
-	if !m.detail || !strings.Contains(m.View().Content, "Ecosystem :") {
-		t.Error("enter must show full-screen detail")
-	}
-	m, _ = send(t, m, press("enter"))
-	if m.detail || !strings.Contains(m.View().Content, "Ecosystem :") {
-		t.Error("enter must return to the list with the detail pane")
 	}
 
 	// Too short for a pane: list only.
