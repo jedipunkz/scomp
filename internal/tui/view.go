@@ -137,9 +137,9 @@ func (m Model) bodyHeight() int {
 
 // detailHeight is the height of the bottom detail pane; 0 hides it.
 func (m Model) detailHeight() int {
-	// The list keeps about a third of the window; the detail pane takes the
-	// rest, minus the two title bars between the panes.
-	lh := max(minListH, m.height/3)
+	// The list keeps about a quarter of the window minus two rows; the
+	// detail pane takes the rest, minus the two title bars between the panes.
+	lh := max(minListH, m.height/4-2)
 	dh := m.bodyHeight() - lh - 2
 	if dh < minDetailH {
 		return 0
