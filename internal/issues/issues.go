@@ -92,15 +92,19 @@ func (c Client) ensureLabel(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var labels []struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(out, &labels); err != nil {
-		return fmt.Errorf("gh label list: unexpected output: %w", err)
-	}
-	for _, l := range labels {
-		if l.Name == securityLabel {
-			return nil
+	// gh label list --search prints nothing (not even []) when nothing
+	// matches; treat empty output as "label missing".
+	if trimmed := bytes.TrimSpace(out); len(trimmed) != 0 {
+		var labels []struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(trimmed, &labels); err != nil {
+			return fmt.Errorf("gh label list: unexpected output: %w", err)
+		}
+		for _, l := range labels {
+			if l.Name == securityLabel {
+				return nil
+			}
 		}
 	}
 	if _, _, err := c.run(ctx, "label", "create", securityLabel,

@@ -221,6 +221,25 @@ func TestCreateAddsSecurityLabel(t *testing.T) {
 	}
 }
 
+func TestCreateAddsSecurityLabelEmptyOutput(t *testing.T) {
+	// Real gh label list --search prints nothing (not even []) when the
+	// label does not exist; Create must still add it.
+	bin, log := fakeGhOuts(t, map[string]string{
+		"label": "",
+		"":      "\nhttps://github.com/o/r/issues/9\n",
+	})
+	url, err := (Client{Bin: bin}).Create(context.Background(), testFinding())
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if url != "https://github.com/o/r/issues/9" {
+		t.Errorf("url = %q", url)
+	}
+	if got := readLog(t, log); !strings.Contains(got, "label create security") {
+		t.Errorf("label create must run for empty label list:\n%s", got)
+	}
+}
+
 func TestCreateKeepsExistingLabel(t *testing.T) {
 	// The security label exists: Create must not touch label create.
 	bin, log := fakeGhOuts(t, map[string]string{
