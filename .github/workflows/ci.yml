@@ -1,14 +1,10 @@
 name: Build and Test
 
+# No paths filter: the main-protection ruleset requires these checks on every
+# pull request. A filtered workflow never reports its checks on out-of-scope
+# PRs (e.g. docs-only), which leaves the PR blocked instead of just "skipped".
 on:
   pull_request:
-    paths:
-      - "**.go"
-      - ".github/workflows/ci.yml"
-      - "go.mod"
-      - "go.sum"
-      - "Makefile"
-      - "testdata/**"
 
 permissions: {}
 
