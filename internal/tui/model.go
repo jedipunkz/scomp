@@ -36,6 +36,15 @@ type Config struct {
 	OnScanned func([]model.Finding) error
 	// OpenURL opens a URL in the browser.
 	OpenURL func(url string) error
+	// SearchIssues finds existing GitHub issues for a finding (OSV ID and
+	// package name in the title), newest first. It is called from a tea.Cmd
+	// goroutine. Nil disables ctrl+i.
+	SearchIssues func(ctx context.Context, f model.Finding) ([]ExistingIssue, error)
+	// CreateIssue opens a new GitHub issue for a finding and returns its URL.
+	CreateIssue func(ctx context.Context, f model.Finding) (string, error)
+	// EditIssue overrides an existing issue's title and body with a fresh
+	// render of the finding and returns the issue URL.
+	EditIssue func(ctx context.Context, f model.Finding, number int) (string, error)
 	// ScanOnStart starts a scan immediately (no cache hit).
 	ScanOnStart bool
 
@@ -122,6 +131,12 @@ type Model struct {
 	previewWidth int
 	previewErr   bool
 
+	// GitHub issue flow (ctrl+i); see issuePromptKey and view.go.
+	issueState   issueState
+	issueFinding model.Finding   // finding the prompt is about
+	issueFound   []ExistingIssue // existing matches, newest first
+	issueSeq     int             // incremented per search; drops stale results
+
 	focusCmd tea.Cmd
 }
 
@@ -136,6 +151,47 @@ type scanDoneMsg struct {
 }
 
 type openedMsg struct{ err error }
+
+// ExistingIssue is a GitHub issue found by SearchIssues for a finding.
+type ExistingIssue struct {
+	Number int // issue number
+	Title  string
+	State  string // GitHub issue state as reported by gh, e.g. "open"
+	URL    string
+}
+
+// issueState is the state of the GitHub issue flow (ctrl+i). Prompt states
+// take over the status line and swallow all other keys.
+type issueState int
+
+const (
+	issueIdle      issueState = iota // ctrl+i starts a search
+	issueSearching                   // SearchIssues is running
+	issueConfirm                     // no existing issue: y creates, c cancels
+	issueChoose                      // existing issue: o overrides, d duplicates, c cancels
+	issueRunning                     // gh issue create/edit is running
+)
+
+type issueAction int
+
+const (
+	issueCreate issueAction = iota
+	issueEdit
+)
+
+type issuesSearchedMsg struct {
+	seq     int // sequence of the search this result belongs to
+	finding model.Finding
+	issues  []ExistingIssue
+	err     error
+}
+
+type issueDoneMsg struct {
+	action issueAction
+	number int // edited issue number, for issueEdit
+	url    string
+	err    error
+}
 
 // New builds the TUI model. ctx cancels running scans.
 func New(ctx context.Context, cfg Config) Model {

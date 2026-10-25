@@ -30,11 +30,11 @@ func (helpKeyMap) ShortHelp() []key.Binding {
 	}
 	return []key.Binding{
 		bind("up down", "↑↓", "move"),
-		bind("j k", "j/k", "scroll"),
 		bind("enter", "enter", "detail"),
 		bind("ctrl+o", "ctrl+o", "open"),
-		bind("ctrl+s", "ctrl+s", "severity"),
-		bind("ctrl+e", "ctrl+e", "ecosystem"),
+		bind("ctrl+i", "ctrl+i", "issue"),
+		bind("ctrl+s", "ctrl+s", "sev"),
+		bind("ctrl+e", "ctrl+e", "eco"),
 		bind("ctrl+f", "ctrl+f", "fixed"),
 		bind("ctrl+r", "ctrl+r", "rescan"),
 		bind("esc", "esc", "quit"),
@@ -57,6 +57,78 @@ func (m Model) statusLine() string {
 		return styleDim.Render(model.Sanitize(m.status))
 	}
 	return ""
+}
+
+// issueQuestion is the question line of the GitHub issue popup.
+func (m Model) issueQuestion() string {
+	switch m.issueState {
+	case issueConfirm:
+		return "Create a GitHub issue for this finding?"
+	case issueChoose:
+		return "Override it, or create a duplicate?"
+	}
+	return ""
+}
+
+// issueKeyHelp renders the answer keys of the popup, help-bar style.
+func (m Model) issueKeyHelp() string {
+	var parts []string
+	pair := func(k, desc string) {
+		parts = append(parts, styleTitle.Render(k)+styleDim.Render(" "+desc))
+	}
+	switch m.issueState {
+	case issueConfirm:
+		pair("y", "create")
+		pair("c", "cancel")
+	case issueChoose:
+		pair("o", "override")
+		pair("d", "duplicate")
+		pair("c", "cancel")
+	}
+	return strings.Join(parts, "   ")
+}
+
+// issueModalLines renders the GitHub issue popup as centered lines. It takes
+// over the whole view: the finding context is inside the popup, so no pane or
+// help bar is shown behind it.
+func (m Model) issueModalLines(w, h int) []string {
+	inner := max(20, min(w-8, 70))
+	f := m.issueFinding
+
+	lines := []string{styleDetailID.Render(f.ID)}
+	if len(f.CVEs) > 0 {
+		lines = append(lines, styleDetailAlt.Render(strings.Join(f.CVEs, ", ")))
+	}
+	lines = append(lines,
+		stylePackage.Render(f.Package.Name)+" "+styleVersion.Render(f.Package.Version)+" "+styleDim.Render(f.Package.Ecosystem),
+	)
+	if f.Summary != "" {
+		lines = append(lines, styleBold.Render(wrap(f.Summary, inner)))
+	}
+	sev := severityStyles[f.Severity].Render(f.Severity.String())
+	if f.CVSSScore > 0 {
+		sev += fmt.Sprintf(" (CVSS %.1f)", f.CVSSScore)
+	}
+	fixed := ""
+	if len(f.FixedVersions) > 0 {
+		fixed = styleFixed.Render(strings.Join(f.FixedVersions, ", "))
+	} else {
+		fixed = styleDim.Render("none")
+	}
+	lines = append(lines, styleDim.Render("severity: ")+sev+styleDim.Render("   fixed: ")+fixed)
+
+	if m.issueState == issueChoose {
+		e := m.issueFound[0]
+		found := fmt.Sprintf("issue #%d [%s]: %s", e.Number, e.State, e.Title)
+		lines = append(lines, "", styleURL.Render(wrap(found, inner)))
+		if n := len(m.issueFound) - 1; n > 0 {
+			lines = append(lines, styleDim.Render(fmt.Sprintf("+%d more matching issue(s)", n)))
+		}
+	}
+	lines = append(lines, "", styleBold.Render(wrap(m.issueQuestion(), inner)), "", m.issueKeyHelp())
+
+	box := styleModalBox.Render(strings.Join(lines, "\n"))
+	return center(strings.Split(box, "\n"), w, h)
 }
 
 func (m Model) bodyHeight() int {
@@ -127,13 +199,18 @@ func (m Model) View() tea.View {
 	m.layout()
 	w := max(1, m.width)
 	var lines []string
-	lines = append(lines, fit(m.headerLine(), w))
-	lines = append(lines, fit(spread(m.input.View(), styleDim.Render(m.filterLabel()), w), w))
-	lines = append(lines, m.bodyLines(w)...)
-	if s := m.statusLine(); s != "" {
-		lines = append(lines, fit(s, w))
+	if m.issueState == issueConfirm || m.issueState == issueChoose {
+		// Full-screen popup: the finding context is inside the popup.
+		lines = m.issueModalLines(w, max(1, m.height))
+	} else {
+		lines = append(lines, fit(m.headerLine(), w))
+		lines = append(lines, fit(spread(m.input.View(), styleDim.Render(m.filterLabel()), w), w))
+		lines = append(lines, m.bodyLines(w)...)
+		if s := m.statusLine(); s != "" {
+			lines = append(lines, fit(s, w))
+		}
+		lines = append(lines, fit(m.help.View(helpKeyMap{}), w))
 	}
-	lines = append(lines, fit(m.help.View(helpKeyMap{}), w))
 	if m.height > 0 && len(lines) > m.height {
 		lines = lines[:m.height]
 	}

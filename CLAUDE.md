@@ -22,7 +22,7 @@ make bench   # benchmarks for the hot path and the parser
 ## Code Conventions
 
 - Package dependency direction (enforced by depguard in `.golangci.yml`):
-  `main` → `repo` / `scanner` / `cache` / `tui` → `model`. `model` is a leaf
+  `main` → `repo` / `scanner` / `cache` / `issues` / `tui` → `model`. `model` is a leaf
   package and imports no other internal package. Only `main` imports `tui`.
   Do not add reverse imports; each lint error says where the import is allowed.
 - Bubble Tea stays split per file: Model in `internal/tui/model.go`, Update in

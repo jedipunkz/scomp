@@ -31,6 +31,8 @@ linters:
           files:
             - "**/internal/cache/**"
           deny:
+            - pkg: github.com/jedipunkz/scomp/internal/issues
+              desc: cache may import only internal/model; run it from main, not from cache
             - pkg: github.com/jedipunkz/scomp/internal/repo
               desc: cache may import only internal/model; run it from main, not from cache
             - pkg: github.com/jedipunkz/scomp/internal/scanner
@@ -43,6 +45,8 @@ linters:
           deny:
             - pkg: github.com/jedipunkz/scomp/internal/cache
               desc: scanner may import only internal/model; run it from main, not from scanner
+            - pkg: github.com/jedipunkz/scomp/internal/issues
+              desc: scanner may import only internal/model; run it from main, not from scanner
             - pkg: github.com/jedipunkz/scomp/internal/repo
               desc: scanner may import only internal/model; run it from main, not from scanner
             - pkg: github.com/jedipunkz/scomp/internal/tui
@@ -53,10 +57,24 @@ linters:
           deny:
             - pkg: github.com/jedipunkz/scomp/internal/cache
               desc: tui may import only internal/model; run it from main, not from tui
+            - pkg: github.com/jedipunkz/scomp/internal/issues
+              desc: tui may import only internal/model; run it from main, not from tui
             - pkg: github.com/jedipunkz/scomp/internal/repo
               desc: tui may import only internal/model; run it from main, not from tui
             - pkg: github.com/jedipunkz/scomp/internal/scanner
               desc: tui may import only internal/model; run it from main, not from tui
+        issues-imports-model-only:
+          files:
+            - "**/internal/issues/**"
+          deny:
+            - pkg: github.com/jedipunkz/scomp/internal/cache
+              desc: issues may import only internal/model; run it from main, not from issues
+            - pkg: github.com/jedipunkz/scomp/internal/repo
+              desc: issues may import only internal/model; run it from main, not from issues
+            - pkg: github.com/jedipunkz/scomp/internal/scanner
+              desc: issues may import only internal/model; run it from main, not from issues
+            - pkg: github.com/jedipunkz/scomp/internal/tui
+              desc: issues may import only internal/model; run it from main, not from issues
         tui-only-from-main:
           files:
             - "!**/main.go"
