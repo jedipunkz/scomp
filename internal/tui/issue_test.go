@@ -37,12 +37,12 @@ func issueCfg(found []ExistingIssue, searchErr error) (Config, *[]model.Finding,
 	}, &searched, &created, &edited
 }
 
-// openPrompt drives one ctrl+i search to its result.
+// openPrompt drives one alt+i search to its result.
 func openPrompt(t *testing.T, m Model) Model {
 	t.Helper()
-	m, cmd := send(t, m, press("ctrl+i"))
+	m, cmd := send(t, m, press("alt+i"))
 	if cmd == nil {
-		t.Fatal("ctrl+i returned no cmd")
+		t.Fatal("alt+i returned no cmd")
 	}
 	m, _ = send(t, m, cmd())
 	return m
@@ -201,36 +201,17 @@ func TestIssueCreateError(t *testing.T) {
 	}
 }
 
-func TestIssueKeyAliases(t *testing.T) {
-	for _, key := range []string{"tab", "ctrl+tab"} {
-		cfg, searched, _, _ := issueCfg(nil, nil)
-		m := newTestModel(cfg)
-		m, cmd := send(t, m, press(key))
-		if cmd == nil || m.issueState != issueSearching {
-			t.Fatalf("%s: cmd=%v state=%v", key, cmd != nil, m.issueState)
-		}
-		m, _ = send(t, m, cmd())
-		if m.issueState != issueConfirm {
-			t.Fatalf("%s: state after search = %v", key, m.issueState)
-		}
-		if len(*searched) != 1 || (*searched)[0].ID != "GHSA-1" {
-			t.Fatalf("%s: searched %+v", key, *searched)
-		}
-		m, _ = send(t, m, press("c"))
-	}
-}
-
 func TestIssueSearchingEscBacksOutAndReSearch(t *testing.T) {
 	cfg, searched, _, _ := issueCfg(nil, nil)
 	m := newTestModel(cfg)
-	m, first := send(t, m, press("ctrl+i"))
+	m, first := send(t, m, press("alt+i"))
 	// esc while searching backs out instead of quitting.
 	m, _ = send(t, m, press("esc"))
 	if m.issueState != issueIdle {
 		t.Fatalf("state = %v, want idle", m.issueState)
 	}
-	// ctrl+i again retargets; the first result is stale and dropped.
-	m, second := send(t, m, press("ctrl+i"))
+	// alt+i again retargets; the first result is stale and dropped.
+	m, second := send(t, m, press("alt+i"))
 	m, _ = send(t, m, first())
 	if m.issueState != issueSearching {
 		t.Fatalf("stale result opened a prompt: %v", m.issueState)
@@ -248,13 +229,13 @@ func TestIssueSearchingEscBacksOutAndReSearch(t *testing.T) {
 func TestIssueNoSelectionAndNoCallbacks(t *testing.T) {
 	// Nothing selected: no prompt.
 	m := newTestModel(Config{Findings: []model.Finding{}})
-	m, cmd := send(t, m, press("ctrl+i"))
+	m, cmd := send(t, m, press("alt+i"))
 	if cmd != nil || m.issueState != issueIdle {
 		t.Errorf("empty list: cmd=%v state=%v", cmd != nil, m.issueState)
 	}
-	// SearchIssues nil: ctrl+i disabled.
+	// SearchIssues nil: alt+i disabled.
 	m = newTestModel(Config{})
-	m, cmd = send(t, m, press("ctrl+i"))
+	m, cmd = send(t, m, press("alt+i"))
 	if cmd != nil || m.issueState != issueIdle {
 		t.Errorf("no callbacks: cmd=%v state=%v", cmd != nil, m.issueState)
 	}

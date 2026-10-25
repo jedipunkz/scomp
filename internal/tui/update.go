@@ -125,25 +125,23 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "shift+down", "j":
 		m.preview.ScrollDown(1)
 		return m, nil
-	case "ctrl+o":
+	case "alt+o":
 		return m, m.openSelected()
-	case "ctrl+i", "tab", "ctrl+tab":
-		// ctrl+i is reported as "tab" on legacy terminals and "ctrl+tab" on
-		// terminals that speak the kitty keyboard protocol.
+	case "alt+i":
 		return m, m.startIssueSearch()
-	case "ctrl+s":
+	case "alt+s":
 		m.sev = (m.sev + 1) % sevFilterCount
 		m.refresh()
 		return m, nil
-	case "ctrl+e":
+	case "alt+e":
 		m.eco = (m.eco + 1) % (len(m.ecos) + 1)
 		m.refresh()
 		return m, nil
-	case "ctrl+f":
+	case "alt+f":
 		m.fixedOnly = !m.fixedOnly
 		m.refresh()
 		return m, nil
-	case "ctrl+r":
+	case "alt+r":
 		if m.scanning {
 			return m, nil
 		}
@@ -180,15 +178,15 @@ func OSVURL(id string) string {
 	return "https://osv.dev/vulnerability/" + url.PathEscape(id)
 }
 
-// The GitHub issue flow (ctrl+i): look up existing issues for the selected
+// The GitHub issue flow (alt+i): look up existing issues for the selected
 // finding, then ask the user what to do. With no existing issue the prompt is
 // y (create) / c (cancel); with one, o (override: edit the existing issue) /
 // d (duplicate: create anyway) / c (cancel). gh is never run while the prompt
-// is open — the search runs at ctrl+i, the create or edit after the answer.
+// is open — the search runs at alt+i, the create or edit after the answer.
 
 // startIssueSearch looks up existing issues for the selected finding. Each
 // search gets a sequence number; results carrying an older number are stale
-// and dropped. A second ctrl+i while searching retargets the search.
+// and dropped. A second alt+i while searching retargets the search.
 func (m *Model) startIssueSearch() tea.Cmd {
 	if m.issueState != issueIdle && m.issueState != issueSearching {
 		return nil

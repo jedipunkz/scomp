@@ -9,7 +9,7 @@ import (
 )
 
 // Filter is applied before the query. It is driven by the
-// ctrl+s / ctrl+e / ctrl+f key bindings; the query can add more constraints.
+// alt+s / alt+e / alt+f key bindings; the query can add more constraints.
 type Filter struct {
 	MinSeverity model.Severity // SeverityUnknown means all
 	Ecosystem   string         // "" means all

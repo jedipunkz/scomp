@@ -28,6 +28,9 @@ func press(s string) tea.KeyPressMsg {
 	case "tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab}
 	}
+	if c, ok := strings.CutPrefix(s, "alt+"); ok {
+		return tea.KeyPressMsg{Code: []rune(c)[0], Mod: tea.ModAlt}
+	}
 	if c, ok := strings.CutPrefix(s, "ctrl+"); ok {
 		code := rune(c[0])
 		if c == "tab" {
@@ -76,7 +79,7 @@ func selectedID(m Model) string {
 
 func TestKeyStrings(t *testing.T) {
 	// Guard the key names handleKey switches on.
-	for _, s := range []string{"up", "down", "esc", "ctrl+s", "ctrl+e", "ctrl+f", "ctrl+r", "ctrl+o", "ctrl+p", "ctrl+n", "j", "k"} {
+	for _, s := range []string{"up", "down", "esc", "alt+s", "alt+e", "alt+f", "alt+r", "alt+o", "alt+i", "ctrl+p", "ctrl+n", "j", "k"} {
 		if got := press(s).String(); got != s {
 			t.Errorf("press(%q).String() = %q", s, got)
 		}
@@ -122,16 +125,16 @@ func TestFilters(t *testing.T) {
 		key  string
 		want int
 	}{
-		{"ctrl+s", 1}, // critical
-		{"ctrl+s", 3}, // high+
-		{"ctrl+s", 4}, // medium+
-		{"ctrl+s", 6}, // all
-		{"ctrl+e", 4}, // Go
-		{"ctrl+e", 1}, // PyPI
-		{"ctrl+e", 1}, // npm
-		{"ctrl+e", 6}, // all
-		{"ctrl+f", 2}, // fixed only
-		{"ctrl+f", 6},
+		{"alt+s", 1}, // critical
+		{"alt+s", 3}, // high+
+		{"alt+s", 4}, // medium+
+		{"alt+s", 6}, // all
+		{"alt+e", 4}, // Go
+		{"alt+e", 1}, // PyPI
+		{"alt+e", 1}, // npm
+		{"alt+e", 6}, // all
+		{"alt+f", 2}, // fixed only
+		{"alt+f", 6},
 	}
 	// ecosystems are sorted: Go, PyPI, npm
 	for i, s := range steps {
@@ -144,8 +147,8 @@ func TestFilters(t *testing.T) {
 
 func TestFilterKeepsSelection(t *testing.T) {
 	m := newTestModel(Config{})
-	m, _ = send(t, m, press("down"))   // GO-1 (high)
-	m, _ = send(t, m, press("ctrl+e")) // Go
+	m, _ = send(t, m, press("down"))  // GO-1 (high)
+	m, _ = send(t, m, press("alt+e")) // Go
 	if got := selectedID(m); got != "GO-1" {
 		t.Errorf("selection after filter = %s, want GO-1", got)
 	}
@@ -210,9 +213,9 @@ func TestScanLifecycle(t *testing.T) {
 	if !strings.Contains(m.View().Content, "scanning") {
 		t.Error("view must show scanning state")
 	}
-	// ctrl+r while scanning must not start a second scan.
-	if _, c := send(t, m, press("ctrl+r")); c != nil {
-		t.Error("ctrl+r during scan must be ignored")
+	// alt+r while scanning must not start a second scan.
+	if _, c := send(t, m, press("alt+r")); c != nil {
+		t.Error("alt+r during scan must be ignored")
 	}
 
 	m, _ = send(t, m, scanDoneMsg{findings: scanned})
@@ -269,9 +272,9 @@ func TestEmptyStates(t *testing.T) {
 func TestOpenURL(t *testing.T) {
 	var opened string
 	m := newTestModel(Config{OpenURL: func(u string) error { opened = u; return nil }})
-	_, cmd := send(t, m, press("ctrl+o"))
+	_, cmd := send(t, m, press("alt+o"))
 	if cmd == nil {
-		t.Fatal("ctrl+o returned no cmd")
+		t.Fatal("alt+o returned no cmd")
 	}
 	cmd()
 	if opened != "https://osv.dev/vulnerability/GHSA-1" {
@@ -279,7 +282,7 @@ func TestOpenURL(t *testing.T) {
 	}
 
 	m = newTestModel(Config{OpenURL: func(string) error { return errors.New("no browser") }})
-	_, cmd = send(t, m, press("ctrl+o"))
+	_, cmd = send(t, m, press("alt+o"))
 	m, _ = send(t, m, cmd())
 	if !strings.Contains(m.View().Content, "no browser") {
 		t.Error("open error must be shown")

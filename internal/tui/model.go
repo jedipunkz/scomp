@@ -38,7 +38,7 @@ type Config struct {
 	OpenURL func(url string) error
 	// SearchIssues finds existing GitHub issues for a finding (OSV ID and
 	// package name in the title), newest first. It is called from a tea.Cmd
-	// goroutine. Nil disables ctrl+i.
+	// goroutine. Nil disables alt+i.
 	SearchIssues func(ctx context.Context, f model.Finding) ([]ExistingIssue, error)
 	// CreateIssue opens a new GitHub issue for a finding and returns its URL.
 	CreateIssue func(ctx context.Context, f model.Finding) (string, error)
@@ -130,7 +130,7 @@ type Model struct {
 	previewWidth int
 	previewErr   bool
 
-	// GitHub issue flow (ctrl+i); see issuePromptKey and view.go.
+	// GitHub issue flow (alt+i); see issuePromptKey and view.go.
 	issueState   issueState
 	issueFinding model.Finding   // finding the prompt is about
 	issueFound   []ExistingIssue // existing matches, newest first
@@ -159,12 +159,12 @@ type ExistingIssue struct {
 	URL    string
 }
 
-// issueState is the state of the GitHub issue flow (ctrl+i). Prompt states
+// issueState is the state of the GitHub issue flow (alt+i). Prompt states
 // take over the status line and swallow all other keys.
 type issueState int
 
 const (
-	issueIdle      issueState = iota // ctrl+i starts a search
+	issueIdle      issueState = iota // alt+i starts a search
 	issueSearching                   // SearchIssues is running
 	issueConfirm                     // no existing issue: y creates, c cancels
 	issueChoose                      // existing issue: o overrides, d duplicates, c cancels
