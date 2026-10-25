@@ -30,12 +30,12 @@ func (helpKeyMap) ShortHelp() []key.Binding {
 	}
 	return []key.Binding{
 		bind("up down", "↑↓", "move"),
-		bind("ctrl+o", "ctrl+o", "open"),
-		bind("ctrl+i", "ctrl+i", "issue"),
-		bind("ctrl+s", "ctrl+s", "sev"),
-		bind("ctrl+e", "ctrl+e", "eco"),
-		bind("ctrl+f", "ctrl+f", "fixed"),
-		bind("ctrl+r", "ctrl+r", "rescan"),
+		bind("alt+o", "alt+o", "open"),
+		bind("alt+i", "alt+i", "issue"),
+		bind("alt+s", "alt+s", "sev"),
+		bind("alt+e", "alt+e", "eco"),
+		bind("alt+f", "alt+f", "fixed"),
+		bind("alt+r", "alt+r", "rescan"),
 		bind("esc", "esc", "quit"),
 	}
 }
@@ -342,7 +342,7 @@ func (m Model) emptyMessage() []string {
 			styleDim.Render("looked for: " + strings.Join(m.cfg.Lockfiles, ", ")),
 		}
 	case len(m.findings) == 0 && m.scanErr != nil:
-		return []string{styleError.Render("Scan failed"), styleDim.Render("ctrl+r to retry")}
+		return []string{styleError.Render("Scan failed"), styleDim.Render("alt+r to retry")}
 	case len(m.findings) == 0:
 		return []string{"No known vulnerabilities"}
 	case len(m.results) == 0:

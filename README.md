@@ -28,7 +28,7 @@ scomp [flags] [path]
 
 Flags must come before `path`.
 
-Results are cached for `--cache-ttl` (default 24h), keyed by the lockfile paths and contents, so unchanged repositories start instantly. Press `ctrl+r` to rescan.
+Results are cached for `--cache-ttl` (default 24h), keyed by the lockfile paths and contents, so unchanged repositories start instantly. Press `alt+r` to rescan.
 
 ### Keys
 
@@ -39,12 +39,12 @@ Results are cached for `--cache-ttl` (default 24h), keyed by the lockfile paths 
 | `pgup` `pgdown` | Page through the list |
 | `shift+↑` `shift+↓` / `k` `j` | Scroll the detail pane |
 | mouse wheel | Scroll the detail pane |
-| `ctrl+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
-| `ctrl+i` | Create a GitHub issue for the selected finding (see below) |
-| `ctrl+s` | Cycle severity filter (all → critical → high+ → medium+) |
-| `ctrl+e` | Cycle ecosystem filter |
-| `ctrl+f` | Toggle showing only findings with a fixed version |
-| `ctrl+r` | Rescan ignoring the cache |
+| `alt+o` | Open `https://osv.dev/vulnerability/<ID>` in a browser |
+| `alt+i` | Create a GitHub issue for the selected finding (see below) |
+| `alt+s` | Cycle severity filter (all → critical → high+ → medium+) |
+| `alt+e` | Cycle ecosystem filter |
+| `alt+f` | Toggle showing only findings with a fixed version |
+| `alt+r` | Rescan ignoring the cache |
 | `esc` / `ctrl+c` | Quit |
 
 ### Query
@@ -67,7 +67,7 @@ Field terms and free text are ANDed. `j` / `k` scroll the detail pane instead of
 
 ### GitHub issues
 
-`ctrl+i` on a finding searches the repository's GitHub issues for it and asks in a popup: with no existing issue, `y` creates it and `c` cancels; with one, `o` overrides it (rewrites its title and body), `d` creates a duplicate, `c` cancels.
+`alt+i` on a finding searches the repository's GitHub issues for it and asks in a popup: with no existing issue, `y` creates it and `c` cancels; with one, `o` overrides it (rewrites its title and body), `d` creates a duplicate, `c` cancels.
 
 Requires `gh` installed and authenticated (`gh auth login`) and a GitHub remote in the scan target. Created issues carry the `security` label; the label is created on demand when the repository does not have it yet (fails if the token lacks the permission). The title and body come from a template embedded in the binary ([`internal/issues/issue.tmpl`](internal/issues/issue.tmpl)); the scan target's own issue templates are not used.
 
