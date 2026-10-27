@@ -37,19 +37,6 @@ type Result struct {
 	Matched []int // byte offsets into the search key covered by a free-text term match (every byte of each match)
 }
 
-// SortFindings orders findings by severity desc, package name asc, ID asc.
-func SortFindings(fs []model.Finding) {
-	slices.SortStableFunc(fs, func(a, b model.Finding) int {
-		if c := cmp.Compare(b.Severity, a.Severity); c != 0 {
-			return c
-		}
-		if c := cmp.Compare(a.Package.Name, b.Package.Name); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.ID, b.ID)
-	})
-}
-
 // Normalized is the precomputed lowercase text Search matches a finding
 // against. It is built once per finding (in setFindings) so the per-keystroke
 // hot path does no normalization; match offsets are byte offsets into Key.
@@ -116,7 +103,7 @@ func Normalize(f model.Finding) (Normalized, keyLayout) {
 
 // Segment offsets of each field inside a search key.
 type keyLayout struct {
-	name, id, summary int // start offsets; -1 if absent
+	name, id, summary int // start offsets
 }
 
 // SearchKey builds "<name> <ecosystem> <id> <cves...> <summary>" and the field offsets.
@@ -161,15 +148,6 @@ func (c sevCond) match(x model.Severity) bool {
 	}
 }
 
-var severityValues = map[string]model.Severity{
-	"unknown":  model.SeverityUnknown,
-	"low":      model.SeverityLow,
-	"medium":   model.SeverityMedium,
-	"moderate": model.SeverityMedium,
-	"high":     model.SeverityHigh,
-	"critical": model.SeverityCritical,
-}
-
 // parseSevConds parses a severity value: an optional comparison operator and a
 // comma-separated list of names ("high", ">=medium", "high,critical").
 func parseSevConds(v string) ([]sevCond, bool) {
@@ -186,7 +164,7 @@ func parseSevConds(v string) ([]sevCond, bool) {
 				break
 			}
 		}
-		sev, ok := severityValues[strings.ToLower(strings.TrimSpace(val))]
+		sev, ok := model.SeverityFromName(val)
 		if !ok {
 			return nil, false
 		}
@@ -275,33 +253,29 @@ func (q *query) add(key, val string) bool {
 	return true
 }
 
+// containsAll reports whether s contains every term.
+func containsAll(s string, terms []string) bool {
+	for _, t := range terms {
+		if !strings.Contains(s, t) {
+			return false
+		}
+	}
+	return true
+}
+
 // match reports whether the finding satisfies every constraint of the query.
 // n carries the precomputed lowercase text of f (see Normalize).
 func (q query) match(f model.Finding, n Normalized) bool {
-	for _, t := range q.terms {
-		if !strings.Contains(n.Key, t) {
-			return false
-		}
+	if !containsAll(n.Key, q.terms) {
+		return false
 	}
 	for _, cs := range q.sev {
 		if !slices.ContainsFunc(cs, func(c sevCond) bool { return c.match(f.Severity) }) {
 			return false
 		}
 	}
-	for _, s := range q.eco {
-		if !strings.Contains(n.Eco, s) {
-			return false
-		}
-	}
-	for _, s := range q.pkg {
-		if !strings.Contains(n.Name, s) {
-			return false
-		}
-	}
-	for _, s := range q.id {
-		if !strings.Contains(n.ID, s) {
-			return false
-		}
+	if !containsAll(n.Eco, q.eco) || !containsAll(n.Name, q.pkg) || !containsAll(n.ID, q.id) || !containsAll(n.Source, q.src) {
+		return false
 	}
 	for _, s := range q.cve {
 		// CVE values are lowercased by parseQuery; n.CVEs by Normalize.
@@ -313,11 +287,6 @@ func (q query) match(f model.Finding, n Normalized) bool {
 			}
 		}
 		if !matched {
-			return false
-		}
-	}
-	for _, s := range q.src {
-		if !strings.Contains(n.Source, s) {
 			return false
 		}
 	}
@@ -355,7 +324,7 @@ func termOffsets(key string, terms []string) []int {
 	return off
 }
 
-// Search filters findings (already sorted with SortFindings) by the Filter,
+// Search filters findings (already sorted with model.SortFindings) by the Filter,
 // then by the parsed query. Results keep the sorted order. norms must hold the
 // Normalized text of each finding, in the same order (see Normalize).
 func Search(findings []model.Finding, norms []Normalized, queryStr string, f Filter) []Result {

@@ -81,7 +81,7 @@ func (e *Exec) Scan(ctx context.Context, root string) ([]model.Finding, error) {
 		}
 		return findings, nil
 	case 128: // no packages found
-		return nil, ErrNoPackages
+		return nil, model.ErrNoLockfiles
 	default:
 		return nil, &ExecError{ExitCode: code, Stderr: stderr.String()}
 	}

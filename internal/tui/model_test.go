@@ -263,6 +263,22 @@ func TestScanLifecycle(t *testing.T) {
 	}
 }
 
+func TestScanStatusKeepsCursorVisible(t *testing.T) {
+	cfg := Config{OnScanned: func([]model.Finding) error { return errors.New("disk full") }}
+	m := newTestModel(cfg)
+	m, _ = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 9}, press("pgdown"), press("pgdown"))
+	if m.offset == 0 {
+		t.Fatal("precondition: list must be scrolled")
+	}
+	m, _ = send(t, m, scanDoneMsg{findings: sampleFindings()})
+	if !strings.Contains(m.statusLine(), "cache write failed") {
+		t.Fatalf("status = %q, want cache write failure", m.statusLine())
+	}
+	if m.cursor < m.offset || m.cursor >= m.offset+m.listHeight() {
+		t.Errorf("cursor %d outside rows [%d, %d)", m.cursor, m.offset, m.offset+m.listHeight())
+	}
+}
+
 func TestRescanKeepsHeaderCounts(t *testing.T) {
 	m := newTestModel(Config{})
 	const want = "6 findings (C:1 H:2 M:1 L:1 ?:1)"

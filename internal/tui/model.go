@@ -285,7 +285,7 @@ func (m *Model) setFindings(fs []model.Finding) {
 	for i, f := range fs {
 		m.findings[i] = model.SanitizeFinding(f)
 	}
-	SortFindings(m.findings)
+	model.SortFindings(m.findings)
 	m.norm = make([]Normalized, len(m.findings))
 	m.layouts = make([]keyLayout, len(m.findings))
 	ecoSet := map[string]bool{}

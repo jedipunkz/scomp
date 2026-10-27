@@ -3,7 +3,6 @@ package scanner
 
 import (
 	"context"
-	"errors"
 
 	"github.com/jedipunkz/scomp/internal/model"
 )
@@ -11,6 +10,3 @@ import (
 type Scanner interface {
 	Scan(ctx context.Context, root string) ([]model.Finding, error)
 }
-
-// ErrNoPackages means the scanner found no supported lockfiles or packages.
-var ErrNoPackages = errors.New("no supported lockfiles found")

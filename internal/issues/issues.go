@@ -148,7 +148,7 @@ func (c Client) run(ctx context.Context, args ...string) (stdout, stderr []byte,
 		case errors.Is(err, exec.ErrNotFound):
 			return nil, nil, fmt.Errorf("%s: command not found; install the GitHub CLI (https://cli.github.com)", bin)
 		case strings.TrimSpace(errOut.String()) != "":
-			return nil, nil, fmt.Errorf("gh %s %s: %s", args[0], args[1], firstLine(errOut.String()))
+			return nil, nil, fmt.Errorf("gh %s %s: %s", args[0], args[1], firstNonEmptyLine(errOut.String()))
 		default:
 			return nil, nil, fmt.Errorf("gh %s %s: %w", args[0], args[1], err)
 		}
@@ -166,15 +166,15 @@ func issueURL(out []byte) (string, error) {
 			continue
 		}
 		if !strings.HasPrefix(line, "https://") {
-			return "", fmt.Errorf("gh: unexpected output: %s", firstLine(string(out)))
+			return "", fmt.Errorf("gh: unexpected output: %s", firstNonEmptyLine(string(out)))
 		}
 		return line, nil
 	}
 	return "", errors.New("gh: no issue URL in output")
 }
 
-// firstLine returns the first non-empty line of s.
-func firstLine(s string) string {
+// firstNonEmptyLine returns the first non-empty line of s.
+func firstNonEmptyLine(s string) string {
 	for line := range strings.SplitSeq(s, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			return line
@@ -241,9 +241,7 @@ func render(f model.Finding, scomp string) (string, string, error) {
 		References: references(f.References),
 		Scomp:      scomp,
 	}
-	if f.CVSSScore > 0 {
-		d.Score = fmt.Sprintf(" (CVSS %.1f)", f.CVSSScore)
-	}
+	d.Score = model.CVSSSuffix(f.CVSSScore)
 	if !f.Published.IsZero() {
 		d.Published = f.Published.Format("2006-01-02")
 	}

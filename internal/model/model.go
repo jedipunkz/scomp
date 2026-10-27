@@ -2,10 +2,16 @@
 package model
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
+
+// ErrNoLockfiles means a scan found no supported lockfiles or packages.
+var ErrNoLockfiles = errors.New("no supported lockfiles found")
 
 type Severity int
 
@@ -78,20 +84,50 @@ func SeverityFromScore(score float64) Severity {
 	}
 }
 
+// severityAliases maps the lowercase severity names accepted from users and
+// advisories to a severity. "moderate" is GHSA's name for medium.
+var severityAliases = map[string]Severity{
+	"unknown":  SeverityUnknown,
+	"low":      SeverityLow,
+	"medium":   SeverityMedium,
+	"moderate": SeverityMedium,
+	"high":     SeverityHigh,
+	"critical": SeverityCritical,
+}
+
+// SeverityFromName maps a severity name or alias (case-insensitive, surrounding
+// space ignored) to a severity. ok is false for any other input.
+func SeverityFromName(s string) (sev Severity, ok bool) {
+	sev, ok = severityAliases[strings.ToLower(strings.TrimSpace(s))]
+	return sev, ok
+}
+
 // SeverityFromLabel maps an advisory label such as GHSA's "MODERATE" to a severity.
 func SeverityFromLabel(label string) Severity {
-	switch strings.ToUpper(strings.TrimSpace(label)) {
-	case "CRITICAL":
-		return SeverityCritical
-	case "HIGH":
-		return SeverityHigh
-	case "MODERATE", "MEDIUM":
-		return SeverityMedium
-	case "LOW":
-		return SeverityLow
-	default:
-		return SeverityUnknown
+	sev, _ := SeverityFromName(label)
+	return sev
+}
+
+// CVSSSuffix renders the CVSS score as a suffix such as " (CVSS 7.4)". It is
+// empty when the score is unknown (0).
+func CVSSSuffix(score float64) string {
+	if !(score > 0) {
+		return ""
 	}
+	return fmt.Sprintf(" (CVSS %.1f)", score)
+}
+
+// SortFindings orders findings by severity desc, package name asc, ID asc.
+func SortFindings(fs []Finding) {
+	slices.SortStableFunc(fs, func(a, b Finding) int {
+		if c := cmp.Compare(b.Severity, a.Severity); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.Package.Name, b.Package.Name); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 }
 
 type Package struct {

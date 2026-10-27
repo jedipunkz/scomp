@@ -111,7 +111,7 @@ func (l Lib) Scan(ctx context.Context, root string) ([]model.Finding, error) {
 	case r := <-done:
 		switch {
 		case errors.Is(r.err, osvscanner.ErrNoPackagesFound):
-			return nil, ErrNoPackages
+			return nil, model.ErrNoLockfiles
 		case r.err != nil:
 			return nil, &LibError{Err: r.err, Log: r.log}
 		}
