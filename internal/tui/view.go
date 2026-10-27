@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	headerLines = 2 // title + query
-	chromeLines = 1 // help; pane title bars are part of the body
-	minListH    = 3
-	minDetailH  = 4
+	headerLines   = 2 // title + query
+	chromeLines   = 1 // help; pane title bars are part of the body
+	titleBarLines = 2 // one title bar per pane
+	minListH      = 3
+	minDetailH    = 4
 )
 
 // helpKeyMap adapts the TUI's keys for the bubbles help component.
@@ -140,7 +141,7 @@ func (m Model) detailHeight() int {
 	// The list keeps about a quarter of the window minus two rows; the
 	// detail pane takes the rest, minus the two title bars between the panes.
 	lh := max(minListH, m.height/4-2)
-	dh := m.bodyHeight() - lh - 2
+	dh := m.bodyHeight() - lh - titleBarLines
 	if dh < minDetailH {
 		return 0
 	}
@@ -154,7 +155,7 @@ func (m Model) listHeight() int {
 	if dh == 0 {
 		return m.bodyHeight() - 1 // list title bar
 	}
-	return m.bodyHeight() - dh - 2 // two title bars
+	return m.bodyHeight() - dh - titleBarLines
 }
 
 // layout sizes the input, help and preview to the current window.
