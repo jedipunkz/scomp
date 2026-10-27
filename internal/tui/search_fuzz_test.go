@@ -8,7 +8,8 @@ import (
 // FuzzSearchQuery runs arbitrary query strings through Search. The invariants
 // below mirror what the TUI list rendering relies on: result indices stay in
 // range and keep the sorted order (strictly increasing), every match offset
-// stays inside the search key and starts a free-text term occurrence, and an
+// stays inside the search key and covers exactly the bytes of the free-text term
+// occurrences (no byte missing, none extra), and an
 // empty query passes the whole (already filtered) input through unchanged.
 func FuzzSearchQuery(f *testing.F) {
 	for _, s := range []string{
@@ -23,8 +24,6 @@ func FuzzSearchQuery(f *testing.F) {
 	f.Fuzz(func(t *testing.T, query string) {
 		results := Search(findings, norms, query, Filter{})
 		prev := -1
-		// Every term occurrence start offset, for the occurrence check below.
-		starts := map[int]bool{}
 		q := parseQuery(query)
 		for _, r := range results {
 			if r.Index < 0 || r.Index >= len(findings) {
@@ -40,20 +39,29 @@ func FuzzSearchQuery(f *testing.F) {
 					t.Fatalf("match offset %d out of range for key %q", off, key)
 				}
 			}
+			// Every byte of every term occurrence, for the extent check below.
+			covered := map[int]bool{}
 			for _, t := range q.terms {
 				for i := 0; ; {
 					j := strings.Index(key[i:], t)
 					if j < 0 {
 						break
 					}
-					starts[i+j] = true
+					for k := range len(t) {
+						covered[i+j+k] = true
+					}
 					i += j + len(t)
 				}
 			}
+			matched := map[int]bool{}
 			for _, off := range r.Matched {
-				if !starts[off] {
-					t.Fatalf("match offset %d is not a term occurrence in key %q", off, key)
+				if !covered[off] {
+					t.Fatalf("match offset %d is not inside a term occurrence in key %q", off, key)
 				}
+				matched[off] = true
+			}
+			if len(matched) != len(covered) {
+				t.Fatalf("matched bytes %d != covered bytes %d in key %q", len(matched), len(covered), key)
 			}
 		}
 		if query == "" && len(results) != len(findings) {

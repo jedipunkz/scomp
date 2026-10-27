@@ -34,7 +34,7 @@ func (f Filter) match(x model.Finding) bool {
 // Result is a finding that passed the filter and query.
 type Result struct {
 	Index   int   // index into the sorted findings
-	Matched []int // byte offsets into the search key that matched a free-text term
+	Matched []int // byte offsets into the search key covered by a free-text term match (every byte of each match)
 }
 
 // SortFindings orders findings by severity desc, package name asc, ID asc.
@@ -327,17 +327,28 @@ func (q query) match(f model.Finding, n Normalized) bool {
 	return true
 }
 
-// termOffsets returns the byte offsets of every occurrence of every term in
-// the (lowercased) key, used for highlighting in the list.
+// termOffsets returns the byte offsets covered by every occurrence of every
+// term in the (lowercased) key: each occurrence contributes start..start+len-1.
+// Overlapping terms may yield duplicate offsets. The slice is sized up front so
+// it is allocated once per call.
 func termOffsets(key string, terms []string) []int {
-	var off []int
+	n := 0
+	for _, t := range terms {
+		n += strings.Count(key, t) * len(t)
+	}
+	if n == 0 {
+		return nil
+	}
+	off := make([]int, 0, n)
 	for _, t := range terms {
 		for i := 0; ; {
 			j := strings.Index(key[i:], t)
 			if j < 0 {
 				break
 			}
-			off = append(off, i+j)
+			for k := range len(t) {
+				off = append(off, i+j+k)
+			}
 			i += j + len(t)
 		}
 	}
