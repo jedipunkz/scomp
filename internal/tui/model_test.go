@@ -27,17 +27,12 @@ func press(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "backspace":
 		return tea.KeyPressMsg{Code: tea.KeyBackspace}
-	case "tab":
-		return tea.KeyPressMsg{Code: tea.KeyTab}
 	}
 	if c, ok := strings.CutPrefix(s, "alt+"); ok {
 		return tea.KeyPressMsg{Code: []rune(c)[0], Mod: tea.ModAlt}
 	}
 	if c, ok := strings.CutPrefix(s, "ctrl+"); ok {
 		code := rune(c[0])
-		if c == "tab" {
-			code = tea.KeyTab
-		}
 		return tea.KeyPressMsg{Code: code, Mod: tea.ModCtrl}
 	}
 	r := []rune(s)[0]
