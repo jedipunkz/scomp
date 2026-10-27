@@ -294,7 +294,7 @@ func (m Model) detailTitle(w int) string {
 }
 
 func (m Model) listLines(w, h int) []string {
-	if msg := m.emptyMessage(); msg != nil {
+	if msg := m.emptyMessage(w); msg != nil {
 		return center(msg, w, h)
 	}
 
@@ -339,16 +339,16 @@ func (m Model) listLines(w, h int) []string {
 	return lines
 }
 
-func (m Model) emptyMessage() []string {
+func (m Model) emptyMessage(w int) []string {
 	switch {
 	case len(m.findings) == 0 && m.scanning:
 		return []string{m.spin.View() + " scanning…"}
 	case len(m.findings) == 0 && m.noLockfiles:
-		return []string{
-			"No supported lockfiles found",
-			"",
-			styleDim.Render("looked for: " + strings.Join(m.cfg.Lockfiles, ", ")),
+		msg := []string{"No supported lockfiles found", ""}
+		for _, l := range strings.Split(wrap("looked for: "+strings.Join(m.cfg.Lockfiles, ", "), w), "\n") {
+			msg = append(msg, styleDim.Render(l))
 		}
+		return msg
 	case len(m.findings) == 0 && m.scanErr != nil:
 		return []string{styleError.Render("Scan failed"), styleDim.Render("alt+r to retry")}
 	case len(m.findings) == 0:

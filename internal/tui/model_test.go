@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -296,6 +297,16 @@ func TestEmptyStates(t *testing.T) {
 	v := m.View().Content
 	if !strings.Contains(v, "No supported lockfiles found") || !strings.Contains(v, "go.mod") {
 		t.Error("missing no-lockfiles message")
+	}
+
+	long := make([]string, 40)
+	for i := range long {
+		long[i] = fmt.Sprintf("pattern-%02d.lock", i)
+	}
+	m = newTestModel(Config{Findings: []model.Finding{}, Lockfiles: long})
+	m, _ = send(t, m, scanDoneMsg{err: ErrNoLockfiles})
+	if v := m.View().Content; !strings.Contains(v, "pattern-12.lock") {
+		t.Error("looked-for list is truncated instead of wrapped")
 	}
 
 	m = newTestModel(Config{})

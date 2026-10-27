@@ -186,18 +186,28 @@ Some OSV advisories have no CVE ID (e.g. only `GO-`). Limiting to CVEs would mis
 | Write method | Write to a temp file and replace with `os.Rename` (to avoid leaving a corrupt file on interruption) |
 | Permissions | Directory 0700, file 0600 |
 
-Target file names for lockfile listing (initial values; finalize during implementation by cross-checking osv-scanner's supported list, to verify):
+Target file names for lockfile listing (`repo.LockfileNames`; verified against osv-scanner v2.7.0's enabled plugins `lockfile`, `sbom`, `directory`). Entries with `*` are path.Match globs on the base name:
 
 | Ecosystem | Files |
 |---|---|
 | Go | `go.mod` |
-| npm / pnpm / yarn | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` |
-| Python | `requirements.txt`, `poetry.lock`, `Pipfile.lock`, `uv.lock` |
+| npm / pnpm / yarn / bun | `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock` |
+| Python | `*requirements*.txt`, `poetry.lock`, `Pipfile.lock`, `pdm.lock`, `uv.lock`, `pylock.toml`, `pylock.*.toml` |
 | Rust | `Cargo.lock` |
-| Ruby | `Gemfile.lock` |
+| Ruby | `Gemfile.lock`, `gems.locked` |
 | PHP | `composer.lock` |
-| Java | `pom.xml`, `gradle.lockfile` |
-| .NET | `packages.lock.json` |
+| Java / Gradle / Maven | `pom.xml`, `*.pom`, `gradle.lockfile`, `buildscript-gradle.lockfile`, `verification-metadata.xml` |
+| .NET | `packages.lock.json`, `packages.config`, `*.deps.json`, `*.csproj`, `*.vbproj`, `*.fsproj`, `Directory.Packages.props`, `Directory.Build.props` |
+| Dart / Flutter | `pubspec.lock`, `package_config.json` |
+| Elixir | `mix.lock` |
+| R | `renv.lock` |
+| Swift | `Package.resolved` |
+| C / C++ | `conan.lock` |
+| Haskell | `cabal.project.freeze`, `stack.yaml.lock` |
+| osv-scanner | `osv-scanner-custom.json` |
+| SBOM | `bom.json`, `bom.xml`, `*.cdx.json`, `*.cdx.xml`, `*.spdx`, `*.spdx.*` (SBOM names match case-insensitively) |
+
+`Podfile.lock` is not listed: osv-scanner v2.7.0 does not enable its extractor. Not covered: OS package databases (`lib/apk/db/installed`, `var/lib/dpkg/status`), which match full paths, and the `vendor/` tree, which `ListLockfiles` skips (existing `skipDirs`).
 
 Listing is used only for cache key computation. The actual dependency extraction is done by the scanner (osv-scanner).
 

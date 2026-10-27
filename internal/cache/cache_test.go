@@ -67,6 +67,28 @@ func TestKey(t *testing.T) {
 	}
 }
 
+func TestKeyCoversScannerInputs(t *testing.T) {
+	root := t.TempDir()
+	files := []string{"app/mix.lock", "sbom/app.cdx.json"}
+	writeFile(t, root, files[0], "mix")
+	writeFile(t, root, files[1], "{}")
+
+	k1, err := Key(root, "s", files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, files[0], "mix changed")
+	k2, _ := Key(root, "s", files)
+	if k2 == k1 {
+		t.Error("key must change when mix.lock changes")
+	}
+	writeFile(t, root, files[1], `{"bomFormat":"CycloneDX"}`)
+	k3, _ := Key(root, "s", files)
+	if k3 == k2 {
+		t.Error("key must change when a CycloneDX SBOM changes")
+	}
+}
+
 func TestStoreLoadSave(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	s := &Store{Dir: filepath.Join(t.TempDir(), "scomp"), Now: func() time.Time { return now }}
