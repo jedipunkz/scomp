@@ -156,6 +156,45 @@ func TestFilterKeepsSelection(t *testing.T) {
 	}
 }
 
+func TestRescanKeepsSelection(t *testing.T) {
+	t.Run("same findings", func(t *testing.T) {
+		m := newTestModel(Config{})
+		m, _ = send(t, m, press("down"), scanDoneMsg{findings: sampleFindings()})
+		if got := selectedID(m); got != "GO-1" {
+			t.Errorf("selection after same rescan = %s, want GO-1", got)
+		}
+	})
+	t.Run("changed findings keep ID", func(t *testing.T) {
+		m := newTestModel(Config{})
+		m, _ = send(t, m, press("down"))
+		fs := append(sampleFindings(), model.Finding{ID: "NEW-9", Severity: model.SeverityCritical, Package: model.Package{Name: "zzz", Ecosystem: "npm"}})
+		m, _ = send(t, m, scanDoneMsg{findings: fs})
+		if got := selectedID(m); got != "GO-1" {
+			t.Errorf("selection after changed rescan = %s, want GO-1", got)
+		}
+		if idx, _ := m.selected(); m.previewFor != idx {
+			t.Errorf("preview shows %d, selected index is %d", m.previewFor, idx)
+		}
+	})
+	t.Run("selected finding gone", func(t *testing.T) {
+		m := newTestModel(Config{})
+		m, _ = send(t, m, press("down"))
+		var fs []model.Finding
+		for _, f := range sampleFindings() {
+			if f.ID != "GO-1" {
+				fs = append(fs, f)
+			}
+		}
+		m, _ = send(t, m, scanDoneMsg{findings: fs})
+		if got := selectedID(m); got != "GHSA-1" {
+			t.Errorf("selection after removal = %q, want first row GHSA-1", got)
+		}
+		if m.cursor < 0 || m.cursor >= len(m.results) {
+			t.Errorf("cursor %d out of range [0,%d)", m.cursor, len(m.results))
+		}
+	})
+}
+
 func TestDetailScrollKeys(t *testing.T) {
 	// Content taller than the pane is needed for scrolling.
 	long := model.Finding{
