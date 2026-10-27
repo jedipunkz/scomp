@@ -45,6 +45,35 @@ func TestListLockfiles(t *testing.T) {
 	}
 }
 
+func TestListLockfilesScannerFiles(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{
+		"app/mix.lock",
+		"ios/Podfile.lock",
+		"sbom/app.cdx.json",
+		"sbom/bom.json",
+		"sbom/Upper.SPDX.JSON",
+		"android/gradle/verification-metadata.xml",
+	} {
+		write(t, root, f)
+	}
+	got, err := ListLockfiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Podfile.lock is not read by osv-scanner v2.7.0, so it is not listed.
+	want := []string{
+		"android/gradle/verification-metadata.xml",
+		"app/mix.lock",
+		"sbom/Upper.SPDX.JSON",
+		"sbom/app.cdx.json",
+		"sbom/bom.json",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestFindRoot(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")

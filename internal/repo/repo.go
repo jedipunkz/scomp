@@ -5,6 +5,7 @@ import (
 	"context"
 	"io/fs"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -13,25 +14,49 @@ import (
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
-// LockfileNames are the files used to compute the cache key.
+// LockfileNames are the file names used to compute the cache key. An entry is
+// an exact base name or a path.Match glob on the base name. The list covers
+// every file the scanner reads in its enabled plugins (lockfile, sbom,
+// directory), so editing any of them invalidates the cache.
+// Verified against osv-scanner v2.7.0 (osv-scalibr v0.5.4-0.20261009010329-5be78a00e3c2):
+// the extractor presets in internal/scalibrplugin/presets.go and each
+// extractor's FileRequired rule. Globs over-match where the extractor checks
+// a directory or a longer suffix; over-matching only costs an extra rescan.
 // Dependency extraction itself is done by the scanner.
 var LockfileNames = []string{
 	// Go
 	"go.mod",
-	// npm / pnpm / yarn
-	"package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+	// npm / pnpm / yarn / bun
+	"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock",
 	// Python
-	"requirements.txt", "poetry.lock", "Pipfile.lock", "uv.lock",
+	"*requirements*.txt", "poetry.lock", "Pipfile.lock", "pdm.lock", "uv.lock", "pylock.toml", "pylock.*.toml",
 	// Rust
 	"Cargo.lock",
 	// Ruby
-	"Gemfile.lock",
+	"Gemfile.lock", "gems.locked",
 	// PHP
 	"composer.lock",
-	// Java
-	"pom.xml", "gradle.lockfile",
+	// Java / Gradle / Maven (verification-metadata.xml is only read under gradle/)
+	"pom.xml", "*.pom", "gradle.lockfile", "buildscript-gradle.lockfile", "verification-metadata.xml",
 	// .NET
-	"packages.lock.json",
+	"packages.lock.json", "packages.config", "*.deps.json", "*.csproj", "*.vbproj", "*.fsproj",
+	"Directory.Packages.props", "Directory.Build.props",
+	// Dart / Flutter
+	"pubspec.lock", "package_config.json",
+	// Elixir
+	"mix.lock",
+	// R
+	"renv.lock",
+	// Swift
+	"Package.resolved",
+	// C / C++
+	"conan.lock",
+	// Haskell
+	"cabal.project.freeze", "stack.yaml.lock",
+	// osv-scanner custom dependency file
+	"osv-scanner-custom.json",
+	// SBOM (SPDX and CycloneDX name conventions; both extractors match case-insensitively)
+	"bom.json", "bom.xml", "*.cdx.json", "*.cdx.xml", "*.spdx", "*.spdx.*",
 }
 
 var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true}
@@ -63,7 +88,7 @@ func ListLockfiles(root string) ([]string, error) {
 			}
 			return nil
 		}
-		if !d.Type().IsRegular() || !slices.Contains(LockfileNames, d.Name()) {
+		if !d.Type().IsRegular() || !isLockfile(d.Name()) {
 			return nil
 		}
 		rel, err := filepath.Rel(root, p)
@@ -75,6 +100,21 @@ func ListLockfiles(root string) ([]string, error) {
 	})
 	slices.Sort(files)
 	return files, err
+}
+
+// isLockfile reports whether name matches an entry of LockfileNames. The SBOM
+// extractors match names case-insensitively, so the lowercased name is also tested.
+func isLockfile(name string) bool {
+	lower := strings.ToLower(name)
+	for _, pat := range LockfileNames {
+		if ok, _ := path.Match(pat, name); ok {
+			return true
+		}
+		if ok, _ := path.Match(pat, lower); ok {
+			return true
+		}
+	}
+	return false
 }
 
 var scpLike = regexp.MustCompile(`^(?:[^@/]+@)?([^:/]+):(.+)$`)
