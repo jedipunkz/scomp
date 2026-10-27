@@ -85,6 +85,25 @@ func (m Model) issueKeyHelp() string {
 	return strings.Join(parts, "   ")
 }
 
+// severityText renders the severity label with its CVSS score when known. It is
+// shared by the detail pane and the issue popup.
+func severityText(f model.Finding) string {
+	sev := severityStyles[f.Severity].Render(f.Severity.String())
+	if f.CVSSScore > 0 {
+		sev += fmt.Sprintf(" (CVSS %.1f)", f.CVSSScore)
+	}
+	return sev
+}
+
+// fixedText renders the fixed versions, or a dim "none" when there are none.
+// It is shared by the detail pane and the issue popup.
+func fixedText(f model.Finding) string {
+	if len(f.FixedVersions) == 0 {
+		return styleDim.Render("none")
+	}
+	return styleFixed.Render(strings.Join(f.FixedVersions, ", "))
+}
+
 // issueModalLines renders the GitHub issue popup as centered lines. It takes
 // over the whole view: the finding context is inside the popup, so no pane or
 // help bar is shown behind it.
@@ -102,17 +121,7 @@ func (m Model) issueModalLines(w, h int) []string {
 	if f.Summary != "" {
 		lines = append(lines, styleBold.Render(wrap(f.Summary, inner)))
 	}
-	sev := severityStyles[f.Severity].Render(f.Severity.String())
-	if f.CVSSScore > 0 {
-		sev += fmt.Sprintf(" (CVSS %.1f)", f.CVSSScore)
-	}
-	fixed := ""
-	if len(f.FixedVersions) > 0 {
-		fixed = styleFixed.Render(strings.Join(f.FixedVersions, ", "))
-	} else {
-		fixed = styleDim.Render("none")
-	}
-	lines = append(lines, styleDim.Render("severity: ")+sev+styleDim.Render("   fixed: ")+fixed)
+	lines = append(lines, styleDim.Render("severity: ")+severityText(f)+styleDim.Render("   fixed: ")+fixedText(f))
 
 	if m.issueState == issueChoose {
 		e := m.issueFound[0]
@@ -417,16 +426,8 @@ func (m Model) renderDetail(f model.Finding, w int) string {
 	field("Package", f.Package.Name+" "+f.Package.Version)
 	field("Ecosystem", f.Package.Ecosystem)
 	field("Source", f.Package.Source)
-	fixed := orNone(f.FixedVersions)
-	if len(f.FixedVersions) > 0 {
-		fixed = styleFixed.Render(fixed)
-	}
-	field("Fixed", fixed)
-	sev := severityStyles[f.Severity].Render(f.Severity.String())
-	if f.CVSSScore > 0 {
-		sev += fmt.Sprintf(" (%.1f)", f.CVSSScore)
-	}
-	field("Severity", sev)
+	field("Fixed", fixedText(f))
+	field("Severity", severityText(f))
 	aliases := orNone(f.Aliases)
 	if len(f.Aliases) > 0 {
 		aliases = styleDetailAlt.Render(aliases)
