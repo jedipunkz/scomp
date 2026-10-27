@@ -265,7 +265,18 @@ func (m *Model) startScan() tea.Cmd {
 	})
 }
 
+// findingKey identifies a finding across rescans: the same OSV ID in the same
+// package at the same lockfile.
+type findingKey struct {
+	id, ecosystem, name, version, source string
+}
+
+func keyOf(f model.Finding) findingKey {
+	return findingKey{f.ID, f.Package.Ecosystem, f.Package.Name, f.Package.Version, f.Package.Source}
+}
+
 func (m *Model) setFindings(fs []model.Finding) {
+	prevKey, hadPrev := m.selectedKey()
 	m.sevCounts = [model.SeverityCritical + 1]int{}
 	m.nameMaxW = 0
 	m.verMaxW = 0
@@ -301,8 +312,11 @@ func (m *Model) setFindings(fs []model.Finding) {
 		m.eco = i + 1
 	}
 	m.previewFor = previewInvalid
-	m.results = nil // old indexes are meaningless for the new slice
-	m.refresh()
+	keep := -1
+	if hadPrev {
+		keep = slices.IndexFunc(m.findings, func(f model.Finding) bool { return keyOf(f) == prevKey })
+	}
+	m.refreshKeep(keep)
 }
 
 func (m Model) ecoName() string {
@@ -322,12 +336,18 @@ func (m *Model) refresh() {
 	if f, ok := m.selected(); ok {
 		selected = f
 	}
+	m.refreshKeep(selected)
+}
+
+// refreshKeep recomputes the visible results. keep is the index into m.findings
+// to keep selected when only filters or data changed; -1 selects the first row.
+func (m *Model) refreshKeep(keep int) {
 	m.results = Search(m.findings, m.norm, m.input.Value(), m.filter())
 	m.cursor = 0
-	if m.input.Value() == "" && selected >= 0 {
+	if m.input.Value() == "" && keep >= 0 {
 		// Keep the selection when only filters or data changed.
 		for i, r := range m.results {
-			if r.Index == selected {
+			if r.Index == keep {
 				m.cursor = i
 				break
 			}
@@ -342,6 +362,14 @@ func (m Model) selected() (int, bool) {
 		return -1, false
 	}
 	return m.results[m.cursor].Index, true
+}
+
+func (m Model) selectedKey() (findingKey, bool) {
+	i, ok := m.selected()
+	if !ok {
+		return findingKey{}, false
+	}
+	return keyOf(m.findings[i]), true
 }
 
 func (m *Model) moveCursor(delta int) {
