@@ -124,12 +124,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	var store *cache.Store
 	var key string
 	if !o.noCache {
-		if store, err = cache.DefaultStore(); err != nil {
-			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", model.Sanitize(err.Error()))
-			store = nil
-		} else if key, err = cache.Key(root, scannerID(scannerPath, o.offline), lockfiles); err != nil {
-			_, _ = fmt.Fprintf(stderr, "warning: cache disabled: %v\n", model.Sanitize(err.Error()))
-			store = nil
+		s, k, cacheErr := setupCache(root, scannerID(scannerPath, o.offline), lockfiles)
+		if cacheErr != nil {
+			_, _ = fmt.Fprintln(stderr, "warning: cache disabled:", model.Sanitize(cacheErr.Error()))
+		} else {
+			store, key = s, k
 		}
 	}
 
@@ -205,6 +204,20 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 // offline mode.
 func scannerID(scannerPath string, offline bool) string {
 	return fmt.Sprintf("scomp %s; %s; offline=%t", versionString(), scannerPath, offline)
+}
+
+// setupCache returns the store and key only when both steps succeed, so the
+// caller never holds a half-initialized cache.
+func setupCache(root, scanner string, lockfiles []string) (*cache.Store, string, error) {
+	store, err := cache.DefaultStore()
+	if err != nil {
+		return nil, "", err
+	}
+	key, err := cache.Key(root, scanner, lockfiles)
+	if err != nil {
+		return nil, "", err
+	}
+	return store, key, nil
 }
 
 func newScanner(o options) (scanner.Scanner, string, error) {

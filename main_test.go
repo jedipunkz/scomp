@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jedipunkz/scomp/internal/model"
 )
 
 func writeProcVersion(t *testing.T, s string) string {
@@ -98,6 +101,75 @@ func TestInWSL(t *testing.T) {
 			}
 		})
 	}
+}
+
+// runJSONScan runs the json pipeline on dir and returns stdout and stderr.
+func runJSONScan(t *testing.T, dir string) (string, string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	if err := run(t.Context(), []string{"--json", dir}, &stdout, &stderr); err != nil {
+		t.Fatalf("run() error = %v; stderr = %q", err, stderr.String())
+	}
+	return stdout.String(), stderr.String()
+}
+
+func TestRunCacheDisabled(t *testing.T) {
+	const warning = "warning: cache disabled:"
+
+	t.Run("DefaultStore error", func(t *testing.T) {
+		// os.UserCacheDir fails when HOME and XDG_CACHE_HOME are both empty.
+		t.Setenv("HOME", "")
+		t.Setenv("XDG_CACHE_HOME", "")
+		dir := t.TempDir()
+
+		stdout, stderr := runJSONScan(t, dir)
+		if n := strings.Count(stderr, warning); n != 1 {
+			t.Fatalf("%q appears %d times, want 1; stderr = %q", warning, n, stderr)
+		}
+		var findings []model.Finding
+		if err := json.Unmarshal([]byte(stdout), &findings); err != nil {
+			t.Fatalf("stdout is not JSON: %v; stdout = %q", err, stdout)
+		}
+	})
+
+	t.Run("cache enabled", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		t.Setenv("XDG_CACHE_HOME", "")
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		_, stderr := runJSONScan(t, dir)
+		if strings.Contains(stderr, warning) {
+			t.Fatalf("unexpected %q; stderr = %q", warning, stderr)
+		}
+	})
+
+	t.Run("Key error", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root reads files regardless of mode")
+		}
+		t.Setenv("HOME", t.TempDir())
+		t.Setenv("XDG_CACHE_HOME", "")
+		dir := t.TempDir()
+		lock := filepath.Join(dir, "package-lock.json")
+		if err := os.WriteFile(lock, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(lock, 0); err != nil {
+			t.Fatal(err)
+		}
+
+		stdout, stderr := runJSONScan(t, dir)
+		if n := strings.Count(stderr, warning); n != 1 {
+			t.Fatalf("%q appears %d times, want 1; stderr = %q", warning, n, stderr)
+		}
+		var findings []model.Finding
+		if err := json.Unmarshal([]byte(stdout), &findings); err != nil {
+			t.Fatalf("stdout is not JSON: %v; stdout = %q", err, stdout)
+		}
+	})
 }
 
 func TestPrintError_Sanitized(t *testing.T) {
