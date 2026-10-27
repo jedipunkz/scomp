@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/jedipunkz/scomp/internal/model"
 )
 
 // LockfileNames are the files used to compute the cache key.
@@ -78,16 +80,18 @@ func ListLockfiles(root string) ([]string, error) {
 var scpLike = regexp.MustCompile(`^(?:[^@/]+@)?([^:/]+):(.+)$`)
 
 // DisplayName returns a short name for root such as "github.com/owner/repo",
-// derived from the origin remote. It falls back to root.
+// derived from the origin remote. It falls back to root. The result is
+// sanitized because the origin URL and root come from the repository and
+// reach the terminal title.
 func DisplayName(ctx context.Context, root string) string {
 	out, err := exec.CommandContext(ctx, "git", "-C", root, "remote", "get-url", "origin").Output()
 	if err != nil {
-		return root
+		return model.Sanitize(root)
 	}
-	if name := remoteName(strings.TrimSpace(string(out))); name != "" {
+	if name := remoteName(model.Sanitize(strings.TrimSpace(string(out)))); name != "" {
 		return name
 	}
-	return root
+	return model.Sanitize(root)
 }
 
 func remoteName(url string) string {
