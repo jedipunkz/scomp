@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -62,5 +66,23 @@ func TestInWSL(t *testing.T) {
 				t.Fatalf("inWSL() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPrintError_Sanitized(t *testing.T) {
+	path := "repo/\x1b]8;;http://evil\x07dir\u202e\x1b[31m"
+	err := fmt.Errorf("list lockfiles: %w", &fs.PathError{Op: "open", Path: path, Err: fs.ErrPermission})
+
+	var buf bytes.Buffer
+	printError(&buf, err)
+
+	got := buf.String()
+	for _, bad := range []string{"\x1b", "\x07", "\u202e"} {
+		if strings.Contains(got, bad) {
+			t.Fatalf("printError() output contains %q: %q", bad, got)
+		}
+	}
+	if want := "scomp: list lockfiles: open repo/dir: permission denied\n"; got != want {
+		t.Fatalf("printError() = %q, want %q", got, want)
 	}
 }
