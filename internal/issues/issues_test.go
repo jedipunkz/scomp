@@ -290,6 +290,67 @@ func TestRenderMinimalFinding(t *testing.T) {
 	}
 }
 
+func TestRenderEscapesMarkdown(t *testing.T) {
+	f := model.Finding{
+		ID:            "GO-1",
+		Summary:       "[link](https://evil.example/) ![](https://evil.example/t.gif) <https://evil.example> @ghost #12",
+		Details:       "# heading\n- item\n1. first\n=== \n```\ncode\n```\n<img src=x> `span`",
+		References:    []string{"https://ok.example/a_b", "https://evil.example/)[x](y)", "not a url"},
+		Package:       model.Package{Name: "evil`pkg|x", Version: "1.0.0", Ecosystem: "npm", Source: "pkg.json"},
+		FixedVersions: []string{"2.0|3"},
+	}
+	title, body, err := render(f, "dev")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if title != "[security] GO-1: evil`pkg|x 1.0.0" {
+		t.Errorf("title = %q", title)
+	}
+	for _, want := range []string{
+		`| Package | ` + "``" + ` evil` + "`" + `pkg\|x ` + "``" + ` |`,
+		"| Fixed in | 2.0\\|3 |",
+		`\[link\]\(https\://evil.example/\) \!\[\]\(https\://evil.example/t.gif\) \<https\://evil.example\> \@ghost \#12`,
+		"\\# heading\n\\- item\n1\\. first\n\\=== \n",
+		"\\`\\`\\`\ncode\n\\`\\`\\`\n\\<img src=x\\> \\`span\\`",
+		"- https://ok.example/a_b",
+		"- `https://evil.example/)[x](y)`",
+		"- `not a url`",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestCodeSpan(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"plain", "`plain`"},
+		{"a`b", "`` a`b ``"},
+		{"``", "``` `` ```"},
+		{"a\nb", "`a b`"},
+	} {
+		if got := codeSpan(tc.in); got != tc.want {
+			t.Errorf("codeSpan(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestEscapeLineStart(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"- item", `\- item`},
+		{"  + item", `  \+ item`},
+		{"=====", `\=====`},
+		{"12. step", `12\. step`},
+		{"3) step", `3\) step`},
+		{"12 apples", "12 apples"},
+		{"", ""},
+	} {
+		if got := escapeLineStart(tc.in); got != tc.want {
+			t.Errorf("escapeLineStart(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestIssueURLRejectsGarbage(t *testing.T) {
 	if _, err := issueURL([]byte("no url here")); err == nil {
 		t.Error("want error for output without URL")

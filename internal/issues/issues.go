@@ -11,12 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
 	"text/template"
+	"unicode"
 
 	"github.com/jedipunkz/scomp/internal/model"
 )
@@ -187,8 +189,11 @@ var tmplSrc string
 var tmpl = template.Must(template.New("issue").Parse(tmplSrc))
 
 // data is the fully prepared template input; the template only formats it.
+// Every attacker-influenced string is Markdown-escaped or wrapped in a code
+// span here, so the template never has to know about escaping.
 type data struct {
 	ID         string
+	IDPath     string
 	CVEs       string
 	Package    string
 	Version    string
@@ -204,27 +209,37 @@ type data struct {
 	Scomp      string
 }
 
+// titleData is the issue title input. A title is plain text, not Markdown, so
+// it takes the sanitized values unescaped.
+type titleData struct {
+	ID      string
+	Package string
+	Version string
+}
+
 // render renders the issue title and body for a finding. The finding is
 // sanitized here too: its strings come from OSV data and lockfiles and must
 // not carry escape sequences into the issue body.
 func render(f model.Finding, scomp string) (string, string, error) {
 	f = model.SanitizeFinding(f)
-	d := data{
-		ID:         f.ID,
-		CVEs:       joinOr(f.CVEs, "none"),
-		Package:    f.Package.Name,
-		Version:    f.Package.Version,
-		Ecosystem:  f.Package.Ecosystem,
-		Source:     f.Package.Source,
-		Severity:   f.Severity.String(),
-		Fixed:      joinOr(f.FixedVersions, "none"),
-		Summary:    strings.TrimSpace(f.Summary),
-		Details:    strings.TrimSpace(f.Details),
-		References: f.References,
-		Scomp:      scomp,
+	source := f.Package.Source
+	if source == "" {
+		source = "unknown"
 	}
-	if d.Source == "" {
-		d.Source = "unknown"
+	d := data{
+		ID:         tableCell(f.ID),
+		IDPath:     url.PathEscape(f.ID),
+		CVEs:       tableCell(joinOr(f.CVEs, "none")),
+		Package:    codeCell(f.Package.Name),
+		Version:    codeCell(f.Package.Version),
+		Ecosystem:  tableCell(f.Package.Ecosystem),
+		Source:     codeCell(source),
+		Severity:   f.Severity.String(),
+		Fixed:      tableCell(joinOr(f.FixedVersions, "none")),
+		Summary:    escapeProse(strings.TrimSpace(f.Summary)),
+		Details:    escapeProse(strings.TrimSpace(f.Details)),
+		References: references(f.References),
+		Scomp:      scomp,
 	}
 	if f.CVSSScore > 0 {
 		d.Score = fmt.Sprintf(" (CVSS %.1f)", f.CVSSScore)
@@ -233,7 +248,8 @@ func render(f model.Finding, scomp string) (string, string, error) {
 		d.Published = f.Published.Format("2006-01-02")
 	}
 	var title, body bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&title, "title", d); err != nil {
+	t := titleData{ID: f.ID, Package: f.Package.Name, Version: f.Package.Version}
+	if err := tmpl.ExecuteTemplate(&title, "title", t); err != nil {
 		return "", "", err
 	}
 	if err := tmpl.ExecuteTemplate(&body, "body", d); err != nil {
@@ -247,4 +263,111 @@ func joinOr(ss []string, none string) string {
 		return none
 	}
 	return strings.Join(ss, ", ")
+}
+
+// mdEscaper backslash-escapes the characters that can start Markdown
+// structure or pings anywhere in a line. The `://` and `www.` rules stop bare
+// URLs from becoming autolinks. Backslash-escaped ASCII punctuation renders as
+// the bare character on GitHub.
+var mdEscaper = strings.NewReplacer(
+	`\`, `\\`, "`", "\\`", "*", `\*`, "_", `\_`, "~", `\~`,
+	"[", `\[`, "]", `\]`, "(", `\(`, ")", `\)`, "<", `\<`, ">", `\>`,
+	"!", `\!`, "#", `\#`, "|", `\|`, "@", `\@`,
+	"://", `\://`, "www.", `www\.`,
+)
+
+// escapeProse escapes free text (Summary, Details) so it renders as literal
+// text and cannot form links, images, headings, lists, code fences or HTML.
+func escapeProse(s string) string {
+	lines := strings.Split(mdEscaper.Replace(s), "\n")
+	for i, line := range lines {
+		lines[i] = escapeLineStart(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// escapeLineStart escapes the markers that start a block at the beginning of
+// a line: list bullets (`-`, `+`), setext underlines (`=`) and ordered list
+// numbers (`1.`, `1)`). Backslash-escaping `*`, `#` and `>` is already done by
+// mdEscaper.
+func escapeLineStart(line string) string {
+	body := strings.TrimLeft(line, " ")
+	if body == "" {
+		return line
+	}
+	indent := line[:len(line)-len(body)]
+	switch body[0] {
+	case '-', '+', '=':
+		return indent + `\` + body
+	}
+	n := 0
+	for n < len(body) && body[n] >= '0' && body[n] <= '9' {
+		n++
+	}
+	if n > 0 && n < len(body) && (body[n] == '.' || body[n] == ')') {
+		return indent + body[:n] + `\` + body[n:]
+	}
+	return line
+}
+
+// oneLine joins the lines of s with spaces. Table cells and list items cannot
+// span lines.
+func oneLine(s string) string {
+	return strings.ReplaceAll(s, "\n", " ")
+}
+
+// tableCell escapes a single-line value for a table cell or prose-like field.
+func tableCell(s string) string {
+	return mdEscaper.Replace(oneLine(s))
+}
+
+// codeSpan wraps s in an inline code span. The fence is one backtick longer
+// than the longest backtick run in s, so no backtick in s closes the span.
+func codeSpan(s string) string {
+	s = oneLine(s)
+	longest, run := 0, 0
+	for _, r := range s {
+		if r == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	fence := strings.Repeat("`", longest+1)
+	if longest > 0 {
+		s = " " + s + " "
+	}
+	return fence + s + fence
+}
+
+// codeCell is codeSpan for a table cell: a pipe must be escaped even inside a
+// code span, or it splits the cell.
+func codeCell(s string) string {
+	return codeSpan(strings.ReplaceAll(s, "|", `\|`))
+}
+
+// references returns the reference list items. A value that is a plain
+// http(s) URL is kept bare so GitHub autolinks it. Anything else becomes a
+// code span, so it cannot form Markdown.
+func references(refs []string) []string {
+	var out []string
+	for _, r := range refs {
+		r = oneLine(r)
+		if !isPlainURL(r) {
+			r = codeSpan(r)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// isPlainURL reports whether s is an absolute http(s) URL with no whitespace
+// and no character that starts Markdown structure.
+func isPlainURL(s string) bool {
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return false
+	}
+	return !strings.ContainsAny(s, "<>[]\\`*~|") && !strings.ContainsFunc(s, unicode.IsSpace)
 }
