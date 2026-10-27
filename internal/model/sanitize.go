@@ -39,8 +39,9 @@ func SanitizeAll(ss []string) []string {
 	return out
 }
 
-// Sanitize removes ANSI escape sequences and other control characters,
-// keeping newlines and converting tabs to spaces.
+// Sanitize removes ANSI escape sequences, control characters and Unicode bidi
+// embedding/override/isolate characters, keeping newlines and converting tabs
+// to spaces.
 func Sanitize(s string) string {
 	s = ansi.Strip(s)
 	return strings.Map(func(r rune) rune {
@@ -49,6 +50,11 @@ func Sanitize(s string) string {
 			return r
 		case r == '\t':
 			return ' '
+		case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069:
+			// Bidi embedding/override and isolate controls are category Cf, so
+			// unicode.IsControl misses them. U+202E (RLO) reverses how the
+			// following text is displayed, which allows visual spoofing.
+			return -1
 		case unicode.IsControl(r), r == ' ', r == ' ':
 			return -1
 		}

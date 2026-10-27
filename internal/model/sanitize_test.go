@@ -9,6 +9,39 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
+// TestSanitize_BidiControlsRemoved checks that Unicode bidi embedding, override
+// and isolate controls (category Cf) are removed, so a package name cannot be
+// displayed reversed (RTLO spoofing).
+func TestSanitize_BidiControlsRemoved(t *testing.T) {
+	in := "moc.pas\u202Eexe.exe"
+	if got, want := Sanitize(in), "moc.pasexe.exe"; got != want {
+		t.Errorf("sanitize RLO = %q, want %q", got, want)
+	}
+	in = "pkg\u2066evil\u2069\u202A\u202B\u202C\u202D\u202E\u2067\u2068"
+	if got, want := Sanitize(in), "pkgevil"; got != want {
+		t.Errorf("sanitize isolates = %q, want %q", got, want)
+	}
+}
+
+// TestSanitize_KeepsNonBidiFormatChars checks that the bidi range does not
+// remove adjacent characters: ZWJ (U+200D) in emoji sequences, and the RLM/LRM
+// marks (U+200E/U+200F) and U+2066-adjacent letters.
+func TestSanitize_KeepsNonBidiFormatChars(t *testing.T) {
+	in := "👨\u200D👩 a\u200Eb\u2029c\u2065d"
+	if got, want := Sanitize(in), "👨\u200D👩 a\u200Ebc\u2065d"; got != want {
+		t.Errorf("sanitize = %q, want %q", got, want)
+	}
+}
+
+// TestSanitizeFinding_BidiInPackageName checks that SanitizeFinding applies the
+// bidi removal to Package.Name, the field shown in the TUI and the issue body.
+func TestSanitizeFinding_BidiInPackageName(t *testing.T) {
+	f := SanitizeFinding(Finding{Package: Package{Name: "moc.pas\u202Eexe.exe\u2066"}})
+	if got, want := f.Package.Name, "moc.pasexe.exe"; got != want {
+		t.Errorf("Package.Name = %q, want %q", got, want)
+	}
+}
+
 // TestSanitizeFinding_AllFieldsSanitized checks that every externally sourced
 // string of a Finding passes through Sanitize.
 func TestSanitizeFinding_AllFieldsSanitized(t *testing.T) {
