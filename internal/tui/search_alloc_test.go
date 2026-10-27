@@ -6,10 +6,11 @@ import (
 
 // TestSearch_AllocCount asserts the allocation count of the search hot path:
 // CLAUDE.md requires Search to avoid per-keystroke allocations, so a
-// regression must fail go test. Unlike benchmark timings, allocation counts
-// are deterministic and CI-safe. Thresholds are the measured values plus ~10%
+// regression must fail go test. Thresholds are the measured values plus ~10%
 // headroom; counts scale with the match set, so each query/size pair carries
-// its own cap.
+// its own cap. The counts are stable per process but not fully across
+// environments: CI macOS once measured 8 for fields/n=10000 where every
+// local run and the Linux bench gate measure 7 (see the cap comment).
 func TestSearch_AllocCount(t *testing.T) {
 	sizes := []int{1000, 10000}
 	caps := map[string][2]float64{
@@ -17,7 +18,10 @@ func TestSearch_AllocCount(t *testing.T) {
 		"empty":  {11, 20},
 		"single": {231, 2216},
 		"multi":  {4, 4},
-		"fields": {7, 7},
+		// n=10000 measured 7 locally (go1.27.0/1.27.3, with and without
+		// -race) and 7.00 on the Linux bench gate; CI macOS once measured 8,
+		// so the cap carries an extra slot of headroom.
+		"fields": {7, 9},
 	}
 	for _, size := range sizes {
 		findings, keys := genFindings(size)
