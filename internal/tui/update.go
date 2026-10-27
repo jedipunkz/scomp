@@ -295,7 +295,7 @@ func (m *Model) handleIssuesSearched(msg issuesSearchedMsg) (tea.Model, tea.Cmd)
 	switch {
 	case msg.err != nil:
 		m.issueState = issueIdle
-		m.status = "search issues: " + firstLine(model.Sanitize(msg.err.Error()))
+		m.status = "search issues: " + errLine(msg.err)
 	case len(msg.issues) == 0:
 		m.issueState = issueConfirm
 	default:
@@ -323,7 +323,7 @@ func (m *Model) handleIssueDone(msg issueDoneMsg) (tea.Model, tea.Cmd) {
 		if msg.action == issueEdit {
 			verb = "update issue"
 		}
-		m.status = verb + ": " + firstLine(model.Sanitize(msg.err.Error()))
+		m.status = verb + ": " + errLine(msg.err)
 	case msg.action == issueEdit:
 		m.status = "updated " + msg.url
 	default:

@@ -46,7 +46,7 @@ func (h helpKeyMap) FullHelp() [][]key.Binding {
 
 func (m Model) statusLine() string {
 	if m.scanErr != nil {
-		msg := "error: " + firstLine(model.Sanitize(m.scanErr.Error()))
+		msg := "error: " + errLine(m.scanErr)
 		return styleError.Render(msg)
 	}
 	if m.status != "" {
@@ -482,6 +482,11 @@ func wrap(s string, w int) string {
 func firstLine(s string) string {
 	s, _, _ = strings.Cut(s, "\n")
 	return s
+}
+
+// errLine returns the sanitized first line of err for one-line status text.
+func errLine(err error) string {
+	return firstLine(model.Sanitize(err.Error()))
 }
 
 // pad right-pads s with spaces to w cells.
