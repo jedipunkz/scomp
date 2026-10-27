@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/jedipunkz/scomp/internal/model"
 )
 
 // fakeScanner writes a shell script that prints stdout/stderr and exits with code.
@@ -49,7 +51,7 @@ func TestExecScanExitCodes(t *testing.T) {
 	}{
 		{name: "no vulnerabilities", stdout: `{"results":[]}`, code: 0, wantCount: 0},
 		{name: "vulnerabilities found", stdout: string(sample), code: 1, wantCount: 4},
-		{name: "no packages", stdout: "", code: 128, wantErr: ErrNoPackages},
+		{name: "no packages", stdout: "", code: 128, wantErr: model.ErrNoLockfiles},
 		{name: "other error", stdout: "", code: 127, wantExec: true},
 		{name: "broken json", stdout: "{", code: 1, wantExec: true},
 	}

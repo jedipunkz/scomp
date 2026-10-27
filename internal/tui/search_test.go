@@ -29,16 +29,6 @@ func ids(fs []model.Finding, rs []Result) []string {
 	return out
 }
 
-func TestSortFindings(t *testing.T) {
-	fs := sampleFindings()
-	SortFindings(fs)
-	got := ids(fs, Search(fs, normOf(fs), "", Filter{}))
-	want := []string{"GHSA-1", "GO-1", "GO-2", "PYSEC-1", "GO-4", "GO-3"}
-	if !slices.Equal(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
 func normOf(fs []model.Finding) []Normalized {
 	norms := make([]Normalized, len(fs))
 	for i, f := range fs {
@@ -49,7 +39,7 @@ func normOf(fs []model.Finding) []Normalized {
 
 func TestSearch(t *testing.T) {
 	fs := sampleFindings()
-	SortFindings(fs)
+	model.SortFindings(fs)
 	norms := normOf(fs)
 
 	tests := []struct {
@@ -85,7 +75,7 @@ func TestSearchTiesKeepSortedOrder(t *testing.T) {
 		{ID: "B", Severity: model.SeverityLow, Package: model.Package{Name: "pkg"}},
 		{ID: "A", Severity: model.SeverityHigh, Package: model.Package{Name: "pkg"}},
 	}
-	SortFindings(fs)
+	model.SortFindings(fs)
 	got := ids(fs, Search(fs, normOf(fs), "pkg", Filter{}))
 	if want := []string{"A", "B"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -94,7 +84,7 @@ func TestSearchTiesKeepSortedOrder(t *testing.T) {
 
 func TestQueryFilters(t *testing.T) {
 	fs := sampleFindings()
-	SortFindings(fs)
+	model.SortFindings(fs)
 	norms := normOf(fs)
 
 	tests := []struct {
@@ -137,7 +127,7 @@ func TestQueryFilters(t *testing.T) {
 
 func TestQueryMatchesFreeTextAndOffsets(t *testing.T) {
 	fs := sampleFindings()
-	SortFindings(fs)
+	model.SortFindings(fs)
 	norms := normOf(fs)
 
 	// Free text must match the joined key, not only single fields.

@@ -13,7 +13,7 @@ import (
 )
 
 // ErrNoLockfiles is returned by Config.Scan when no supported lockfile exists.
-var ErrNoLockfiles = errors.New("no supported lockfiles found")
+var ErrNoLockfiles = model.ErrNoLockfiles
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -68,10 +68,15 @@ func (m Model) handleScanDone(msg scanDoneMsg) (tea.Model, tea.Cmd) {
 	m.cancelScan = nil
 	m.previewFor = previewInvalid
 
+	// setFindings refreshes (clamps the offset and re-renders the preview), so
+	// only the branches that leave the findings unchanged call the pair. A
+	// status or scanErr change alters the body height, so it needs the clamp too.
 	switch {
 	case errors.Is(msg.err, context.Canceled):
 		m.status = "scan canceled"
-	case errors.Is(msg.err, ErrNoLockfiles):
+		m.clampOffset()
+		m.updatePreview()
+	case errors.Is(msg.err, model.ErrNoLockfiles):
 		m.scanErr = nil
 		m.noLockfiles = true
 		m.cachedAt = timeZero
@@ -79,21 +84,22 @@ func (m Model) handleScanDone(msg scanDoneMsg) (tea.Model, tea.Cmd) {
 	case msg.err != nil:
 		// Keep showing what we have (e.g. the cached list).
 		m.scanErr = msg.err
+		m.clampOffset()
+		m.updatePreview()
 	default:
 		m.scanErr = nil
 		m.noLockfiles = false
 		m.cachedAt = timeZero
 		m.status = ""
-		m.setFindings(msg.findings)
+		// Set the status before setFindings: its refresh clamps the offset
+		// for the final status line.
 		if m.cfg.OnScanned != nil {
 			if err := m.cfg.OnScanned(msg.findings); err != nil {
 				m.status = "cache write failed: " + err.Error()
 			}
 		}
+		m.setFindings(msg.findings)
 	}
-	m.layout()
-	m.clampOffset()
-	m.updatePreview()
 	return m, nil
 }
 

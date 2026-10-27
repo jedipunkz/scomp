@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/jedipunkz/scomp/internal/model"
 )
 
 func TestLibActions(t *testing.T) {
@@ -30,8 +32,8 @@ func TestLibActions(t *testing.T) {
 
 func TestLibNoPackages(t *testing.T) {
 	_, err := Lib{}.Scan(context.Background(), t.TempDir())
-	if !errors.Is(err, ErrNoPackages) {
-		t.Fatalf("err = %v, want ErrNoPackages", err)
+	if !errors.Is(err, model.ErrNoLockfiles) {
+		t.Fatalf("err = %v, want ErrNoLockfiles", err)
 	}
 }
 

@@ -88,11 +88,7 @@ func (m Model) issueKeyHelp() string {
 // severityText renders the severity label with its CVSS score when known. It is
 // shared by the detail pane and the issue popup.
 func severityText(f model.Finding) string {
-	sev := severityStyles[f.Severity].Render(f.Severity.String())
-	if f.CVSSScore > 0 {
-		sev += fmt.Sprintf(" (CVSS %.1f)", f.CVSSScore)
-	}
-	return sev
+	return severityStyles[f.Severity].Render(f.Severity.String()) + model.CVSSSuffix(f.CVSSScore)
 }
 
 // fixedText renders the fixed versions, or a dim "none" when there are none.
@@ -339,9 +335,9 @@ func (m Model) listLines(w, h int) []string {
 		sev := severityStyles[f.Severity].Render(pad(f.Severity.Short(), 4))
 		cols := []string{
 			marker + sev,
-			pad(ansi.Truncate(highlight(f.Package.Name, lay.name, matched, nameSt, styleHighlight), nameW, "…"), nameW),
-			pad(ansi.Truncate(verSt.Render(f.Package.Version), verW, "…"), verW),
-			pad(ansi.Truncate(highlight(f.ID, lay.id, matched, idSt, styleHighlight), idW, "…"), idW),
+			fit(highlight(f.Package.Name, lay.name, matched, nameSt, styleHighlight), nameW),
+			fit(verSt.Render(f.Package.Version), verW),
+			fit(highlight(f.ID, lay.id, matched, idSt, styleHighlight), idW),
 			highlight(f.Summary, lay.summary, matched, sumSt, styleHighlight),
 		}
 		lines[row] = fit(strings.Join(cols, "  "), w)

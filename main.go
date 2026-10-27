@@ -165,11 +165,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		Lockfiles:   repo.LockfileNames,
 		Notice:      notice,
 		Scan: func(ctx context.Context) ([]model.Finding, error) {
-			fs, err := sc.Scan(ctx, root)
-			if errors.Is(err, scanner.ErrNoPackages) {
-				return nil, tui.ErrNoLockfiles
-			}
-			return fs, err
+			return sc.Scan(ctx, root)
 		},
 		OnScanned: save,
 		OpenURL:   openBrowser,
@@ -242,7 +238,7 @@ func runJSON(ctx context.Context, sc scanner.Scanner, root string, cached *cache
 	} else {
 		fs, err := sc.Scan(ctx, root)
 		switch {
-		case errors.Is(err, scanner.ErrNoPackages):
+		case errors.Is(err, model.ErrNoLockfiles):
 			_, _ = fmt.Fprintln(stderr, "scomp:", model.Sanitize(err.Error()))
 		case err != nil:
 			var d interface{ Details() string }
@@ -257,7 +253,7 @@ func runJSON(ctx context.Context, sc scanner.Scanner, root string, cached *cache
 			}
 		}
 	}
-	tui.SortFindings(findings)
+	model.SortFindings(findings)
 	if findings == nil {
 		findings = []model.Finding{}
 	}
