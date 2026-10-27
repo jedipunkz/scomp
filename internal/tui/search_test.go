@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
@@ -186,5 +187,52 @@ func TestSearchKeyLayout(t *testing.T) {
 	}
 	if key[l.id:l.id+4] != "GO-1" || key[l.summary:] != "sum" || key[l.name:l.name+3] != "pkg" {
 		t.Errorf("bad layout %+v for %q", l, key)
+	}
+}
+
+func TestFoldKeyPreservesByteLength(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"", ""},
+		{"ABC", "abc"},
+		{"ÀB", "àb"},
+		{"İ", "İ"}, // ToLower(U+0130) is 1 byte, the original is 2: kept as is
+		{"aİB", "aİb"},
+	}
+	for _, tt := range tests {
+		got := foldKey(tt.in)
+		if got != tt.want {
+			t.Errorf("foldKey(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+		if len(got) != len(tt.in) {
+			t.Errorf("foldKey(%q) changed byte length: %d -> %d", tt.in, len(tt.in), len(got))
+		}
+	}
+}
+
+func TestHighlightOffsetsAfterLengthChangingRune(t *testing.T) {
+	f := model.Finding{
+		ID:      "GO-9",
+		Summary: "İ flaw in parser",
+		Package: model.Package{Name: "x", Ecosystem: "Go"},
+	}
+	n, lay := Normalize(f)
+	key, _ := SearchKey(f)
+	rs := Search([]model.Finding{f}, []Normalized{n}, "flaw", Filter{})
+	if len(rs) != 1 {
+		t.Fatalf("got %d results, want 1", len(rs))
+	}
+	want := strings.Index(key, "flaw")
+	if !slices.Equal(rs[0].Matched, []int{want}) {
+		t.Fatalf("Matched = %v, want [%d]", rs[0].Matched, want)
+	}
+
+	matched := map[int]bool{}
+	for _, o := range rs[0].Matched {
+		matched[o] = true
+	}
+	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
+	got := highlight(f.Summary, lay.summary, matched, lipgloss.NewStyle(), bracket)
+	if wantS := "İ [f]law in parser"; got != wantS {
+		t.Errorf("highlight = %q, want %q", got, wantS)
 	}
 }
