@@ -46,10 +46,16 @@ func main() {
 	stop()
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
-			fmt.Fprintln(os.Stderr, "scomp:", err)
+			printError(os.Stderr, err)
 		}
 		os.Exit(1)
 	}
+}
+
+// printError writes the top-level error to stderr. The message can embed
+// scanned-repo paths (fs.PathError) or osv-scanner text, so it is sanitized.
+func printError(stderr io.Writer, err error) {
+	_, _ = fmt.Fprintln(stderr, "scomp:", model.Sanitize(err.Error()))
 }
 
 func parseFlags(args []string, stderr io.Writer) (options, error) {
