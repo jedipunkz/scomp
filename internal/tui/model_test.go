@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -358,5 +359,30 @@ func TestHeaderKeepsStatusVisible(t *testing.T) {
 	header := strings.Split(m.View().Content, "\n")[0]
 	if !strings.Contains(header, "cached 1h ago") || !strings.Contains(header, "x/repo") {
 		t.Errorf("header = %q", header)
+	}
+}
+
+func TestTitleAndScannerPathAreSanitized(t *testing.T) {
+	const payload = "\x1b]52;c;SGVsbG8=\x07\x1b]2;pwned\x07"
+	cfg := Config{
+		Title:       "github.com/x/y" + payload + "\x07\nlf",
+		ScannerPath: "osv-scanner" + payload + "\x1b[31m",
+	}
+	m := newTestModel(cfg)
+	v := m.View()
+
+	if strings.ContainsFunc(v.WindowTitle, unicode.IsControl) {
+		t.Errorf("WindowTitle has control characters: %q", v.WindowTitle)
+	}
+	if !strings.Contains(v.WindowTitle, "github.com/x/ylf") {
+		t.Errorf("WindowTitle = %q, want sanitized title", v.WindowTitle)
+	}
+
+	header := m.headerLine()
+	if strings.Contains(header, "\x1b]") || strings.Contains(header, "\x07") || strings.Contains(header, "SGVsbG8=") || strings.Contains(header, "pwned") {
+		t.Errorf("header contains an OSC payload: %q", header)
+	}
+	if strings.ContainsFunc(ansi.Strip(header), unicode.IsControl) {
+		t.Errorf("header has control characters after stripping SGR: %q", header)
 	}
 }

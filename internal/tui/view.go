@@ -204,10 +204,16 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "scomp"
-	if m.cfg.Title != "" {
-		v.WindowTitle += " · " + m.cfg.Title
+	if t := singleLine(m.cfg.Title); t != "" {
+		v.WindowTitle += " · " + t
 	}
 	return v
+}
+
+// singleLine sanitizes s for the terminal title and the header, which must be
+// one line without control sequences.
+func singleLine(s string) string {
+	return strings.ReplaceAll(model.Sanitize(s), "\n", "")
 }
 
 func (m Model) headerLine() string {
@@ -216,7 +222,7 @@ func (m Model) headerLine() string {
 		return severityStyles[s].Render(fmt.Sprintf("%s:%d", label, counts[s]))
 	}
 	// Keep the end of long titles (repo name) so the status parts stay visible.
-	title := m.cfg.Title
+	title := singleLine(m.cfg.Title)
 	if limit := max(12, m.width/3); ansi.StringWidth(title) > limit {
 		title = ansi.TruncateLeft(title, ansi.StringWidth(title)-limit+1, "…")
 	}
@@ -241,8 +247,8 @@ func (m Model) headerLine() string {
 	case !m.cachedAt.IsZero():
 		parts = append(parts, "cached "+ago(m.now().Sub(m.cachedAt)))
 	}
-	if m.cfg.ScannerPath != "" {
-		parts = append(parts, styleDim.Render(m.cfg.ScannerPath))
+	if p := singleLine(m.cfg.ScannerPath); p != "" {
+		parts = append(parts, styleDim.Render(p))
 	}
 	return strings.Join(parts, " ─ ")
 }

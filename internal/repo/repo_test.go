@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"testing"
 )
 
@@ -74,6 +76,35 @@ func TestFindRoot(t *testing.T) {
 	gotEval, _ := filepath.EvalSymlinks(root)
 	if !inGit || gotEval != want {
 		t.Errorf("root = %s (inGit=%v), want %s", root, inGit, want)
+	}
+}
+
+// fakeGit puts a git stub that prints stdout and exits with code on PATH.
+func fakeGit(t *testing.T, stdout string, code int) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script fake is not supported on windows")
+	}
+	dir := t.TempDir()
+	script := "#!/bin/sh\nprintf '%s' '" + stdout + "'\nexit " + strconv.Itoa(code) + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+}
+
+func TestDisplayNameSanitizesOrigin(t *testing.T) {
+	const osc52 = "https://github.com/jedipunkz/scomp\x1b]52;c;SGVsbG8=\x07.git\n"
+	fakeGit(t, osc52, 0)
+	if got := DisplayName(context.Background(), "/repo"); got != "github.com/jedipunkz/scomp" {
+		t.Errorf("DisplayName = %q, want %q", got, "github.com/jedipunkz/scomp")
+	}
+}
+
+func TestDisplayNameFallbackSanitizesRoot(t *testing.T) {
+	fakeGit(t, "", 1)
+	if got := DisplayName(context.Background(), "/repo\x07\x1b]2;pwned\x07"); got != "/repo" {
+		t.Errorf("DisplayName = %q", got)
 	}
 }
 
