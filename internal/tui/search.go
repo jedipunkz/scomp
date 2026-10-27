@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jedipunkz/scomp/internal/model"
 )
@@ -52,12 +54,44 @@ func SortFindings(fs []model.Finding) {
 // against. It is built once per finding (in setFindings) so the per-keystroke
 // hot path does no normalization; match offsets are byte offsets into Key.
 type Normalized struct {
-	Key    string   // lowercased search key
+	Key    string   // search key folded by foldKey (byte-length preserving)
 	Eco    string   // lowercased ecosystem
 	Name   string   // lowercased package name
 	ID     string   // lowercased OSV ID
 	Source string   // lowercased lockfile source
 	CVEs   []string // lowercased CVE IDs
+}
+
+// foldKey lowercases s rune by rune, keeping each rune's original byte length.
+// A rune whose lowercase form has a different length (e.g. U+0130 'İ' becomes
+// "i" + U+0307) is kept as is. Match offsets in the folded key therefore map
+// 1:1 onto the original string, which highlight() indexes. Returns s unchanged
+// (no allocation) when nothing folds.
+func foldKey(s string) string {
+	var b strings.Builder
+	folded := false
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		lr := unicode.ToLower(r)
+		fold := lr != r && utf8.RuneLen(lr) == size
+		if fold && !folded {
+			folded = true
+			b.Grow(len(s))
+			b.WriteString(s[:i])
+		}
+		switch {
+		case !folded:
+		case fold:
+			b.WriteRune(lr)
+		default:
+			b.WriteString(s[i : i+size])
+		}
+		i += size
+	}
+	if !folded {
+		return s
+	}
+	return b.String()
 }
 
 // Normalize lowercases the text of one finding for reuse across keystrokes.
@@ -70,7 +104,7 @@ func Normalize(f model.Finding) (Normalized, keyLayout) {
 		cves[i] = strings.ToLower(c)
 	}
 	n := Normalized{
-		Key:    strings.ToLower(key),
+		Key:    foldKey(key),
 		Eco:    strings.ToLower(f.Package.Ecosystem),
 		Name:   strings.ToLower(f.Package.Name),
 		ID:     strings.ToLower(f.ID),
@@ -191,7 +225,7 @@ func parseQuery(s string) query {
 		key, val, ok := strings.Cut(fields[i], ":")
 		k := strings.ToLower(key)
 		if !ok || !fieldKeys[k] {
-			q.terms = append(q.terms, strings.ToLower(fields[i]))
+			q.terms = append(q.terms, foldKey(fields[i]))
 			continue
 		}
 		raw := fields[i]
@@ -201,7 +235,7 @@ func parseQuery(s string) query {
 			raw += " " + val
 		}
 		if !q.add(k, val) {
-			q.terms = append(q.terms, strings.ToLower(raw))
+			q.terms = append(q.terms, foldKey(raw))
 		}
 	}
 	return q
