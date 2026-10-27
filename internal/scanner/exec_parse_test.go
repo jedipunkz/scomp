@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"encoding/json"
 	"os"
 	"slices"
 	"testing"
@@ -141,6 +142,42 @@ func TestParseEdgeCases(t *testing.T) {
 			}
 			if !slices.Equal(ids, tt.wantIDs) {
 				t.Errorf("IDs = %v, want %v", ids, tt.wantIDs)
+			}
+		})
+	}
+}
+
+func TestParseRejectsUnsafeOSVIDs(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		keep bool
+	}{
+		{name: "cmd.exe separator", id: "GHSA-x&calc", keep: false},
+		{name: "cmd.exe pipe", id: "GHSA-x|calc", keep: false},
+		{name: "cmd.exe caret", id: "GHSA-x^calc", keep: false},
+		{name: "cmd.exe redirect", id: "GHSA-x>out", keep: false},
+		{name: "cmd.exe percent", id: "GHSA-x%PATH%", keep: false},
+		{name: "space", id: "GHSA x", keep: false},
+		{name: "escape control char", id: "GHSA-x\x1b]8;;evil", keep: false},
+		{name: "NUL byte", id: "GHSA-x\x00", keep: false},
+		{name: "colon form", id: "RLSA-2023:1234", keep: true},
+		{name: "uuid style", id: "3f2a9c1e-7b4d-4e8a-9f10-2c5d6e7f8a9b", keep: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, err := json.Marshal(tt.id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			in := `{"results":[{"source":{"path":"/r/go.mod"},"packages":[{"package":{"name":"a","version":"1","ecosystem":"Go"},"groups":[{"ids":[` +
+				string(id) + `]}]}]}]}`
+			got, err := Parse([]byte(in), "/r")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kept := len(got) == 1; kept != tt.keep {
+				t.Fatalf("kept = %v, want %v: %+v", kept, tt.keep, got)
 			}
 		})
 	}

@@ -127,6 +127,14 @@ func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.
 		return model.Finding{}, false
 	}
 	id := g.ids[0]
+	if !validOSVID(id) {
+		// The ID is embedded in the osv.dev URL that openBrowser passes to
+		// cmd.exe under WSL. url.PathEscape leaves & and | unescaped, so an
+		// unvalidated ID could run commands there. Real OSV IDs (GHSA-…,
+		// CVE-…, GO-…, PYSEC-…, RLSA-2023:1234, UUID-style) use only these
+		// characters.
+		return model.Finding{}, false
+	}
 	var v *osvVuln
 	for _, gid := range g.ids {
 		if v = vulns[gid]; v != nil {
@@ -183,6 +191,21 @@ func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.
 		f.Severity = model.SeverityFromLabel(v.DatabaseSpecific.Severity)
 	}
 	return f, true
+}
+
+// validOSVID reports whether id uses only ASCII letters, digits, '.', ':' and
+// '-'. Control characters and cmd.exe metacharacters are rejected.
+func validOSVID(id string) bool {
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '.', c == ':', c == '-':
+		default:
+			return false
+		}
+	}
+	return id != ""
 }
 
 // fixedVersions collects "fixed" events for the affected entry matching pkg.

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,36 @@ func writeProcVersion(t *testing.T, s string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestCmdStartCommandRefusesMetacharacters(t *testing.T) {
+	for _, u := range []string{
+		"https://osv.dev/vulnerability/GHSA-x&calc",
+		"https://osv.dev/vulnerability/GHSA-x|calc",
+		"https://osv.dev/vulnerability/GHSA-x^calc",
+		"https://osv.dev/vulnerability/GHSA-x<calc",
+		"https://osv.dev/vulnerability/GHSA-x>calc",
+		"https://osv.dev/vulnerability/GHSA-x%PATH%",
+		"https://osv.dev/vulnerability/GHSA-x\"calc",
+		"https://osv.dev/vulnerability/GHSA-x\x1b]calc",
+	} {
+		cmd, err := cmdStartCommand(u)
+		if err == nil || cmd != nil {
+			t.Errorf("cmdStartCommand(%q) = %v, %v; want error and nil cmd", u, cmd, err)
+		}
+	}
+}
+
+func TestCmdStartCommandSafeURL(t *testing.T) {
+	const u = "https://osv.dev/vulnerability/GHSA-4v7x-pqxf-cx7m"
+	cmd, err := cmdStartCommand(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"cmd.exe", "/c", "start", "", u}
+	if !slices.Equal(cmd.Args, want) {
+		t.Errorf("args = %q, want %q", cmd.Args, want)
+	}
 }
 
 func TestInWSL(t *testing.T) {

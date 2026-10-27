@@ -15,6 +15,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -260,7 +261,11 @@ func openBrowser(url string) error {
 	case runtime.GOOS == "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	case inWSL(os.Getenv, procVersion):
-		cmd = wslOpen(url)
+		c, err := wslOpen(url)
+		if err != nil {
+			return err
+		}
+		cmd = c
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}
@@ -292,11 +297,22 @@ func inWSL(getenv func(string) string, procVersionPath string) bool {
 // wslview (from wslu) is preferred; cmd.exe start is the fallback when wslu
 // is not installed. cmd.exe is unavailable when WSL interop is disabled, and
 // openBrowser reports the Start error through the TUI status line.
-func wslOpen(url string) *exec.Cmd {
+func wslOpen(url string) (*exec.Cmd, error) {
 	if _, err := exec.LookPath("wslview"); err == nil {
-		return exec.Command("wslview", url)
+		return exec.Command("wslview", url), nil
 	}
-	return exec.Command("cmd.exe", "/c", "start", "", url)
+	return cmdStartCommand(url)
+}
+
+// cmdStartCommand builds the cmd.exe fallback. cmd.exe interprets & | ^ < > %
+// and " in the command line even when Go quotes the argument, so a URL with
+// any of them could run arbitrary commands. The parser already drops such
+// OSV IDs; this check refuses them here as well.
+func cmdStartCommand(url string) (*exec.Cmd, error) {
+	if strings.ContainsAny(url, `&|^<>%"`) || strings.IndexFunc(url, unicode.IsControl) >= 0 {
+		return nil, errors.New("refusing to open URL with cmd.exe: it contains cmd.exe metacharacters or control characters")
+	}
+	return exec.Command("cmd.exe", "/c", "start", "", url), nil
 }
 
 func versionString() string {
