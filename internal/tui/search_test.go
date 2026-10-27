@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -145,17 +146,25 @@ func TestQueryMatchesFreeTextAndOffsets(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
-	// Matched offsets point at the term occurrences in the key.
+	// Matched offsets cover every byte of each term occurrence in the key.
 	rs := Search(fs, norms, "go", Filter{})
 	if len(rs) == 0 {
 		t.Fatal("no results")
 	}
 	for _, r := range rs {
 		lower := norms[r.Index].Key
-		for _, o := range r.Matched {
-			if !strings.HasPrefix(lower[o:], "go") {
-				t.Errorf("offset %d in %q is not a match", o, lower)
+		want := map[int]bool{}
+		for i := 0; i+2 <= len(lower); i++ {
+			if lower[i:i+2] == "go" {
+				want[i], want[i+1] = true, true
 			}
+		}
+		got := map[int]bool{}
+		for _, o := range r.Matched {
+			got[o] = true
+		}
+		if !maps.Equal(got, want) {
+			t.Errorf("Matched = %v for %q, want covered bytes %v", r.Matched, lower, want)
 		}
 	}
 }
@@ -222,8 +231,8 @@ func TestHighlightOffsetsAfterLengthChangingRune(t *testing.T) {
 		t.Fatalf("got %d results, want 1", len(rs))
 	}
 	want := strings.Index(key, "flaw")
-	if !slices.Equal(rs[0].Matched, []int{want}) {
-		t.Fatalf("Matched = %v, want [%d]", rs[0].Matched, want)
+	if wantOff := []int{want, want + 1, want + 2, want + 3}; !slices.Equal(rs[0].Matched, wantOff) {
+		t.Fatalf("Matched = %v, want %v", rs[0].Matched, wantOff)
 	}
 
 	matched := map[int]bool{}
@@ -232,7 +241,29 @@ func TestHighlightOffsetsAfterLengthChangingRune(t *testing.T) {
 	}
 	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
 	got := highlight(f.Summary, lay.summary, matched, lipgloss.NewStyle(), bracket)
-	if wantS := "İ [f]law in parser"; got != wantS {
+	if wantS := "İ [flaw] in parser"; got != wantS {
 		t.Errorf("highlight = %q, want %q", got, wantS)
+	}
+}
+
+func TestHighlightOverlappingTerms(t *testing.T) {
+	f := model.Finding{
+		ID:      "GO-8",
+		Summary: "flaw flaw",
+		Package: model.Package{Name: "x", Ecosystem: "Go"},
+	}
+	n, lay := Normalize(f)
+	rs := Search([]model.Finding{f}, []Normalized{n}, "flaw law", Filter{})
+	if len(rs) != 1 {
+		t.Fatalf("got %d results, want 1", len(rs))
+	}
+	matched := map[int]bool{}
+	for _, o := range rs[0].Matched {
+		matched[o] = true
+	}
+	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
+	got := highlight(f.Summary, lay.summary, matched, lipgloss.NewStyle(), bracket)
+	if want := "[flaw] [flaw]"; got != want {
+		t.Errorf("highlight = %q, want %q", got, want)
 	}
 }
