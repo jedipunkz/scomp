@@ -160,7 +160,7 @@ type ExistingIssue struct {
 }
 
 // issueState is the state of the GitHub issue flow (alt+i). Prompt states
-// take over the status line and swallow all other keys.
+// take over the whole view and swallow all other keys.
 type issueState int
 
 const (
