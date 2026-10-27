@@ -352,6 +352,32 @@ func TestViewFitsWindow(t *testing.T) {
 	}
 }
 
+func TestViewFitsHeightWithHelpBar(t *testing.T) {
+	heights := []int{30}
+	for h := 3; h <= 14; h++ {
+		heights = append(heights, h)
+	}
+	for _, status := range []string{"", "scan done"} {
+		for _, h := range heights {
+			m := newTestModel(Config{})
+			m.status = status
+			m, _ = send(t, m, tea.WindowSizeMsg{Width: 120, Height: h})
+			lines := strings.Split(m.View().Content, "\n")
+			if len(lines) > h {
+				t.Errorf("height %d status %q: %d lines exceed height", h, status, len(lines))
+			}
+			// Help needs header, list title, status (if set) and help rows.
+			need := headerLines + 1 + chromeLines
+			if status != "" {
+				need++
+			}
+			if h >= need && !strings.Contains(m.View().Content, "rescan") {
+				t.Errorf("height %d status %q: help bar missing (%d lines)", h, status, len(lines))
+			}
+		}
+	}
+}
+
 func lipglossWidth(s string) int { return ansi.StringWidth(s) }
 
 func TestHeaderKeepsStatusVisible(t *testing.T) {
