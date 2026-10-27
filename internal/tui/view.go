@@ -147,10 +147,12 @@ func (m Model) detailHeight() int {
 	return dh
 }
 
+// listHeight is the number of finding rows. The body is bodyHeight rows: the
+// list title bar, the list rows, and when shown the detail title bar and pane.
 func (m Model) listHeight() int {
 	dh := m.detailHeight()
 	if dh == 0 {
-		return m.bodyHeight()
+		return m.bodyHeight() - 1 // list title bar
 	}
 	return m.bodyHeight() - dh - 2 // two title bars
 }
