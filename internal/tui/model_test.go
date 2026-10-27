@@ -228,6 +228,41 @@ func TestScanLifecycle(t *testing.T) {
 	}
 }
 
+func TestRescanKeepsHeaderCounts(t *testing.T) {
+	m := newTestModel(Config{})
+	const want = "6 findings (C:1 H:2 M:1 L:1 ?:1)"
+	if got := ansi.Strip(m.headerLine()); !strings.Contains(got, want) {
+		t.Fatalf("initial header = %q, want %q", got, want)
+	}
+	for i := range 2 {
+		m, _ = send(t, m, scanDoneMsg{findings: sampleFindings()})
+		if got := ansi.Strip(m.headerLine()); !strings.Contains(got, want) {
+			t.Errorf("rescan %d header = %q, want %q", i+1, got, want)
+		}
+	}
+}
+
+func TestEmptyScanResetsHeaderAndWidths(t *testing.T) {
+	const want = "0 findings (C:0 H:0 M:0 L:0)"
+	cases := []struct {
+		name string
+		msg  tea.Msg
+	}{
+		{"empty scan", scanDoneMsg{findings: []model.Finding{}}},
+		{"no lockfiles", scanDoneMsg{err: ErrNoLockfiles}},
+	}
+	for _, c := range cases {
+		m := newTestModel(Config{})
+		m, _ = send(t, m, c.msg)
+		if got := ansi.Strip(m.headerLine()); !strings.Contains(got, want) {
+			t.Errorf("%s: header = %q, want %q", c.name, got, want)
+		}
+		if m.nameMaxW != 0 || m.verMaxW != 0 || m.idMaxW != 0 {
+			t.Errorf("%s: widths = %d/%d/%d, want 0/0/0", c.name, m.nameMaxW, m.verMaxW, m.idMaxW)
+		}
+	}
+}
+
 func TestScanErrorKeepsCachedList(t *testing.T) {
 	m := newTestModel(Config{CachedAt: time.Now().Add(-3 * time.Hour)})
 	if !strings.Contains(m.View().Content, "cached 3h ago") {

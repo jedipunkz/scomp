@@ -101,7 +101,7 @@ type Model struct {
 	layouts  []keyLayout
 	ecos     []string
 
-	// per-render aggregates recomputed only when the findings change
+	// per-render aggregates, reset and recomputed in setFindings when the findings change
 	sevCounts [model.SeverityCritical + 1]int
 	nameMaxW  int
 	verMaxW   int
@@ -266,6 +266,10 @@ func (m *Model) startScan() tea.Cmd {
 }
 
 func (m *Model) setFindings(fs []model.Finding) {
+	m.sevCounts = [model.SeverityCritical + 1]int{}
+	m.nameMaxW = 0
+	m.verMaxW = 0
+	m.idMaxW = 0
 	m.findings = make([]model.Finding, len(fs))
 	for i, f := range fs {
 		m.findings[i] = model.SanitizeFinding(f)
