@@ -3,9 +3,7 @@ package scanner
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 
@@ -84,9 +82,9 @@ func (l Lib) Scan(ctx context.Context, root string) ([]model.Finding, error) {
 	})
 
 	type result struct {
-		data []byte
-		log  string
-		err  error
+		findings []model.Finding
+		log      string
+		err      error
 	}
 	done := make(chan result, 1)
 	go func() {
@@ -101,8 +99,7 @@ func (l Lib) Scan(ctx context.Context, root string) ([]model.Finding, error) {
 			done <- result{log: log, err: err}
 			return
 		}
-		data, err := json.Marshal(res)
-		done <- result{data: data, log: log, err: err}
+		done <- result{findings: convert(&res, root), log: log}
 	}()
 
 	select {
@@ -115,10 +112,6 @@ func (l Lib) Scan(ctx context.Context, root string) ([]model.Finding, error) {
 		case r.err != nil:
 			return nil, &LibError{Err: r.err, Log: r.log}
 		}
-		findings, err := Parse(r.data, root)
-		if err != nil {
-			return nil, &LibError{Err: fmt.Errorf("convert results: %w", err), Log: r.log}
-		}
-		return findings, nil
+		return r.findings, nil
 	}
 }
