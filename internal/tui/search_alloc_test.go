@@ -11,6 +11,14 @@ import (
 // its own cap. The counts are stable per process but not fully across
 // environments: CI macOS once measured 8 for fields/n=10000 where every
 // local run and the Linux bench gate measure 7 (see the cap comment).
+//
+// AllocsPerRun counts process-wide mallocs and integer-divides by the run
+// count, so a few stray runtime allocations during the window add a whole
+// alloc at 10 runs (CI macOS measured 5 for multi/n=10000 against 3
+// elsewhere). allocRuns dilutes them below one per run without touching the
+// caps.
+const allocRuns = 100
+
 func TestSearch_AllocCount(t *testing.T) {
 	sizes := []int{1000, 10000}
 	caps := map[string][2]float64{
@@ -26,7 +34,7 @@ func TestSearch_AllocCount(t *testing.T) {
 	for _, size := range sizes {
 		findings, keys := genFindings(size)
 		for _, q := range benchmarkQueries {
-			allocs := testing.AllocsPerRun(10, func() {
+			allocs := testing.AllocsPerRun(allocRuns, func() {
 				_ = Search(findings, keys, q.query, Filter{})
 			})
 			want := caps[q.name][map[int]int{1000: 0, 10000: 1}[size]]
