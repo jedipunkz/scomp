@@ -263,6 +263,34 @@ func TestScanLifecycle(t *testing.T) {
 	}
 }
 
+func TestHasStatusMatchesStatusLine(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  string
+		scanErr error
+		want    bool
+	}{
+		{name: "none"},
+		{name: "status", status: "scan canceled", want: true},
+		{name: "control chars only", status: "\x1b[0m\x07", want: true},
+		{name: "scan error", scanErr: errors.New("boom"), want: true},
+		{name: "scan error and status", status: "x", scanErr: errors.New("boom"), want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel(Config{})
+			m.status = tt.status
+			m.scanErr = tt.scanErr
+			if got := m.hasStatus(); got != tt.want {
+				t.Errorf("hasStatus() = %v, want %v", got, tt.want)
+			}
+			if got, line := m.hasStatus(), m.statusLine(); got != (line != "") {
+				t.Errorf("hasStatus() = %v, statusLine() = %q", got, line)
+			}
+		})
+	}
+}
+
 func TestScanStatusKeepsCursorVisible(t *testing.T) {
 	cfg := Config{OnScanned: func([]model.Finding) error { return errors.New("disk full") }}
 	m := newTestModel(cfg)
