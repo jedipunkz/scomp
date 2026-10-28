@@ -321,8 +321,9 @@ func (m Model) listLines(w, h int) []string {
 		r := m.results[i]
 		f := m.findings[r.Index]
 		lay := m.layouts[r.Index]
+		// Offsets are computed here, for visible rows only, not per match in Search.
 		matched := map[int]bool{}
-		for _, o := range r.Matched {
+		for _, o := range termOffsets(m.norm[r.Index].Key, m.terms) {
 			matched[o] = true
 		}
 		nameSt, verSt, idSt := stylePackage, styleVersion, styleID

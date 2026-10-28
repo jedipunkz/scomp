@@ -69,8 +69,10 @@ func BenchmarkSearch(b *testing.B) {
 		for _, q := range benchmarkQueries {
 			b.Run(fmt.Sprintf("query=%s/n=%d", q.name, size), func(b *testing.B) {
 				b.ReportAllocs()
+				// Reuse the results like Model.refreshKeep does across keystrokes.
+				var buf []Result
 				for range b.N {
-					_ = Search(findings, keys, q.query, Filter{})
+					buf, _ = Search(buf, findings, keys, q.query, Filter{})
 				}
 			})
 		}

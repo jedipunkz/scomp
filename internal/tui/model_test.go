@@ -508,3 +508,25 @@ func TestTitleAndScannerPathAreSanitized(t *testing.T) {
 		t.Errorf("header has control characters after stripping SGR: %q", header)
 	}
 }
+
+func TestListLinesHighlightsQueryTerms(t *testing.T) {
+	m := newTestModel(Config{})
+	m = typeText(t, m, "pollution")
+	if len(m.results) != 1 || len(m.terms) != 1 || m.terms[0] != "pollution" {
+		t.Fatalf("results = %v, terms = %q", m.results, m.terms)
+	}
+	row := m.listLines(m.width, m.listHeight())[0]
+	if want := styleHighlight.Render("pollution"); !strings.Contains(row, want) {
+		t.Errorf("row %q does not contain highlighted %q", row, want)
+	}
+
+	// Widening the query again reuses the results buffer and still lists
+	// every finding.
+	for range len("pollution") {
+		m, _ = send(t, m, press("backspace"))
+	}
+	if len(m.results) != len(m.findings) || len(m.terms) != 0 {
+		t.Errorf("after clearing: %d results, terms %q; want %d results, no terms",
+			len(m.results), m.terms, len(m.findings))
+	}
+}

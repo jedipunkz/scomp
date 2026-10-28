@@ -31,10 +31,11 @@ func (f Filter) match(x *model.Finding) bool {
 	return true
 }
 
-// Result is a finding that passed the filter and query.
+// Result is a finding that passed the filter and query. Match offsets are not
+// part of it: only visible rows need them, so the view computes them with
+// termOffsets from the terms Search returns.
 type Result struct {
-	Index   int   // index into the sorted findings
-	Matched []int // byte offsets into the search key covered by a free-text term match (every byte of each match)
+	Index int // index into the sorted findings
 }
 
 // Normalized is the precomputed lowercase text Search matches a finding
@@ -300,7 +301,8 @@ func (q *query) match(f *model.Finding, n *Normalized) bool {
 // termOffsets returns the byte offsets covered by every occurrence of every
 // term in the (lowercased) key: each occurrence contributes start..start+len-1.
 // Overlapping terms may yield duplicate offsets. The slice is sized up front so
-// it is allocated once per call.
+// it is allocated once per call. It runs per visible row at render time, not
+// per match in Search.
 func termOffsets(key string, terms []string) []int {
 	n := 0
 	for _, t := range terms {
@@ -328,9 +330,13 @@ func termOffsets(key string, terms []string) []int {
 // Search filters findings (already sorted with model.SortFindings) by the Filter,
 // then by the parsed query. Results keep the sorted order. norms must hold the
 // Normalized text of each finding, in the same order (see Normalize).
-func Search(findings []model.Finding, norms []Normalized, queryStr string, f Filter) []Result {
+//
+// Results are appended to dst[:0], so passing the previous results reuses
+// their capacity instead of regrowing the slice on every keystroke. terms are
+// the folded free-text terms of the query, for termOffsets.
+func Search(dst []Result, findings []model.Finding, norms []Normalized, queryStr string, f Filter) (results []Result, terms []string) {
 	q := parseQuery(queryStr)
-	var out []Result
+	out := dst[:0]
 	for i := range findings {
 		x := &findings[i]
 		if !f.match(x) {
@@ -339,7 +345,7 @@ func Search(findings []model.Finding, norms []Normalized, queryStr string, f Fil
 		if !q.match(x, &norms[i]) {
 			continue
 		}
-		out = append(out, Result{Index: i, Matched: termOffsets(norms[i].Key, q.terms)})
+		out = append(out, Result{Index: i})
 	}
-	return out
+	return out, q.terms
 }

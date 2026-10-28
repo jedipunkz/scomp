@@ -21,6 +21,13 @@ func sampleFindings() []model.Finding {
 	}
 }
 
+// search runs Search without a reused buffer and drops the terms, for tests
+// that only check which findings match.
+func search(fs []model.Finding, norms []Normalized, query string, f Filter) []Result {
+	rs, _ := Search(nil, fs, norms, query, f)
+	return rs
+}
+
 func ids(fs []model.Finding, rs []Result) []string {
 	out := []string{}
 	for _, r := range rs {
@@ -62,7 +69,7 @@ func TestSearch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ids(fs, Search(fs, norms, tt.query, tt.filter))
+			got := ids(fs, search(fs, norms, tt.query, tt.filter))
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -76,7 +83,7 @@ func TestSearchTiesKeepSortedOrder(t *testing.T) {
 		{ID: "A", Severity: model.SeverityHigh, Package: model.Package{Name: "pkg"}},
 	}
 	model.SortFindings(fs)
-	got := ids(fs, Search(fs, normOf(fs), "pkg", Filter{}))
+	got := ids(fs, search(fs, normOf(fs), "pkg", Filter{}))
 	if want := []string{"A", "B"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -117,7 +124,7 @@ func TestQueryFilters(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ids(fs, Search(fs, norms, tt.query, Filter{}))
+			got := ids(fs, search(fs, norms, tt.query, Filter{}))
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -131,13 +138,13 @@ func TestQueryMatchesFreeTextAndOffsets(t *testing.T) {
 	norms := normOf(fs)
 
 	// Free text must match the joined key, not only single fields.
-	got := ids(fs, Search(fs, norms, "pollution", Filter{}))
+	got := ids(fs, search(fs, norms, "pollution", Filter{}))
 	if want := []string{"GHSA-1"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
-	// Matched offsets cover every byte of each term occurrence in the key.
-	rs := Search(fs, norms, "go", Filter{})
+	// Match offsets cover every byte of each term occurrence in the key.
+	rs, terms := Search(nil, fs, norms, "go", Filter{})
 	if len(rs) == 0 {
 		t.Fatal("no results")
 	}
@@ -149,12 +156,13 @@ func TestQueryMatchesFreeTextAndOffsets(t *testing.T) {
 				want[i], want[i+1] = true, true
 			}
 		}
+		offs := termOffsets(lower, terms)
 		got := map[int]bool{}
-		for _, o := range r.Matched {
+		for _, o := range offs {
 			got[o] = true
 		}
 		if !maps.Equal(got, want) {
-			t.Errorf("Matched = %v for %q, want covered bytes %v", r.Matched, lower, want)
+			t.Errorf("termOffsets = %v for %q, want covered bytes %v", offs, lower, want)
 		}
 	}
 }
@@ -216,17 +224,18 @@ func TestHighlightOffsetsAfterLengthChangingRune(t *testing.T) {
 	}
 	n, lay := Normalize(f)
 	key, _ := SearchKey(f)
-	rs := Search([]model.Finding{f}, []Normalized{n}, "flaw", Filter{})
+	rs, terms := Search(nil, []model.Finding{f}, []Normalized{n}, "flaw", Filter{})
 	if len(rs) != 1 {
 		t.Fatalf("got %d results, want 1", len(rs))
 	}
+	offs := termOffsets(n.Key, terms)
 	want := strings.Index(key, "flaw")
-	if wantOff := []int{want, want + 1, want + 2, want + 3}; !slices.Equal(rs[0].Matched, wantOff) {
-		t.Fatalf("Matched = %v, want %v", rs[0].Matched, wantOff)
+	if wantOff := []int{want, want + 1, want + 2, want + 3}; !slices.Equal(offs, wantOff) {
+		t.Fatalf("termOffsets = %v, want %v", offs, wantOff)
 	}
 
 	matched := map[int]bool{}
-	for _, o := range rs[0].Matched {
+	for _, o := range offs {
 		matched[o] = true
 	}
 	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
@@ -243,12 +252,12 @@ func TestHighlightOverlappingTerms(t *testing.T) {
 		Package: model.Package{Name: "x", Ecosystem: "Go"},
 	}
 	n, lay := Normalize(f)
-	rs := Search([]model.Finding{f}, []Normalized{n}, "flaw law", Filter{})
+	rs, terms := Search(nil, []model.Finding{f}, []Normalized{n}, "flaw law", Filter{})
 	if len(rs) != 1 {
 		t.Fatalf("got %d results, want 1", len(rs))
 	}
 	matched := map[int]bool{}
-	for _, o := range rs[0].Matched {
+	for _, o := range termOffsets(n.Key, terms) {
 		matched[o] = true
 	}
 	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
