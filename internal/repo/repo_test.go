@@ -45,6 +45,74 @@ func TestListLockfiles(t *testing.T) {
 	}
 }
 
+func TestListLockfilesGitignore(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{
+		"go.mod",
+		"build/go.mod",           // ignored dir (root .gitignore "build/")
+		"dist/a/go.mod",          // ignored dir (root .gitignore "/dist")
+		"keep/dist/go.mod",       // "/dist" is anchored to the root, so kept
+		"tmp/x/Cargo.lock",       // ignored dir (nested pattern "**/x")
+		"tmp/y/Cargo.lock",       // kept
+		"py/requirements.txt",    // ignored file (root .gitignore "requirements.txt")
+		"app/out/yarn.lock",      // ignored dir (app/.gitignore "out")
+		"app/yarn.lock",          // kept
+		"other/out/yarn.lock",    // app/.gitignore does not apply outside app/
+		"cmt/#go.mod/Cargo.lock", // comment lines are not patterns
+	} {
+		write(t, root, f)
+	}
+	gitignores := map[string]string{
+		".gitignore":     "# build output\nbuild/\n/dist\n\nrequirements.txt\r\n#go.mod\n",
+		"tmp/.gitignore": "**/x\n",
+		"app/.gitignore": "out\n",
+	}
+	for rel, body := range gitignores {
+		if err := os.WriteFile(filepath.Join(root, rel), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := ListLockfiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"app/yarn.lock",
+		"cmt/#go.mod/Cargo.lock",
+		"go.mod",
+		"keep/dist/go.mod",
+		"other/out/yarn.lock",
+		"tmp/y/Cargo.lock",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestListLockfilesGitignoreNegation(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"a/go.mod", "b/go.mod", "c/go.mod"} {
+		write(t, root, f)
+	}
+	// "!b/" re-includes b within the same .gitignore file.
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("*/\n!b/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ListLockfiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"b/go.mod"}; !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestListLockfilesMissingRoot(t *testing.T) {
+	if _, err := ListLockfiles(filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Error("ListLockfiles on a missing root returned nil error")
+	}
+}
+
 func TestListLockfilesScannerFiles(t *testing.T) {
 	root := t.TempDir()
 	for _, f := range []string{

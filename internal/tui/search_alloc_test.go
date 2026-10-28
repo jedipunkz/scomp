@@ -13,6 +13,14 @@ import (
 // parseQuery. The counts are stable per process but not fully across
 // environments: CI macOS once measured one more than Linux for
 // fields/n=10000 (see the cap comment).
+//
+// AllocsPerRun counts process-wide mallocs and integer-divides by the run
+// count, so a few stray runtime allocations during the window add a whole
+// alloc at 10 runs (CI macOS measured 5 for multi/n=10000 against 3
+// elsewhere). allocRuns dilutes them below one per run without touching the
+// caps.
+const allocRuns = 100
+
 func TestSearch_AllocCount(t *testing.T) {
 	sizes := []int{1000, 10000}
 	caps := map[string][2]float64{
@@ -32,7 +40,7 @@ func TestSearch_AllocCount(t *testing.T) {
 			// Reuse the results like Model.refreshKeep does across keystrokes;
 			// AllocsPerRun's warm-up call grows buf before measuring.
 			var buf []Result
-			allocs := testing.AllocsPerRun(10, func() {
+			allocs := testing.AllocsPerRun(allocRuns, func() {
 				buf, _ = Search(buf, findings, keys, q.query, Filter{})
 			})
 			want := caps[q.name][map[int]int{1000: 0, 10000: 1}[size]]
