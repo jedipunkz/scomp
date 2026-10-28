@@ -234,12 +234,8 @@ func TestHighlightOffsetsAfterLengthChangingRune(t *testing.T) {
 		t.Fatalf("termOffsets = %v, want %v", offs, wantOff)
 	}
 
-	matched := map[int]bool{}
-	for _, o := range offs {
-		matched[o] = true
-	}
 	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
-	got := highlight(f.Summary, lay.summary, matched, lipgloss.NewStyle(), bracket)
+	got := highlight(f.Summary, lay.summary, offs, lipgloss.NewStyle(), bracket)
 	if wantS := "İ [flaw] in parser"; got != wantS {
 		t.Errorf("highlight = %q, want %q", got, wantS)
 	}
@@ -256,13 +252,44 @@ func TestHighlightOverlappingTerms(t *testing.T) {
 	if len(rs) != 1 {
 		t.Fatalf("got %d results, want 1", len(rs))
 	}
-	matched := map[int]bool{}
-	for _, o := range termOffsets(n.Key, terms) {
-		matched[o] = true
+	offs := termOffsets(n.Key, terms)
+	if !slices.IsSorted(offs) {
+		t.Fatalf("termOffsets = %v, want sorted offsets", offs)
 	}
 	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
-	got := highlight(f.Summary, lay.summary, matched, lipgloss.NewStyle(), bracket)
+	got := highlight(f.Summary, lay.summary, offs, lipgloss.NewStyle(), bracket)
 	if want := "[flaw] [flaw]"; got != want {
 		t.Errorf("highlight = %q, want %q", got, want)
+	}
+}
+
+func TestHighlightRuns(t *testing.T) {
+	bracket := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
+	paren := lipgloss.NewStyle().Transform(func(s string) string { return "(" + s + ")" })
+	tests := []struct {
+		name  string
+		s     string
+		start int
+		offs  []int
+		want  string
+	}{
+		{name: "no offsets", s: "abc", start: 4, offs: nil, want: "(abc)"},
+		{name: "no offsets empty", s: "", start: 4, offs: nil, want: "()"},
+		{name: "offsets before s", s: "abc", start: 4, offs: []int{0, 1, 3}, want: "(abc)"},
+		{name: "offsets after s", s: "abc", start: 4, offs: []int{7, 8}, want: "(abc)"},
+		{name: "offsets around empty s", s: "", start: 4, offs: []int{3, 4, 5}, want: ""},
+		{name: "whole s", s: "abc", start: 4, offs: []int{4, 5, 6}, want: "[abc]"},
+		{name: "duplicates", s: "abcd", start: 0, offs: []int{1, 1, 2, 2, 2}, want: "(a)[bc](d)"},
+		{name: "spans fields", s: "abcd", start: 2, offs: []int{0, 1, 2, 5, 6}, want: "[a](bc)[d]"},
+		{name: "multibyte rune", s: "äb日c", start: 0, offs: []int{0, 1, 3, 4, 5}, want: "[ä](b)[日](c)"},
+		// Only a rune's first byte decides, as with the per-rune lookup before.
+		{name: "rune tail only", s: "äb", start: 0, offs: []int{1}, want: "(äb)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := highlight(tt.s, tt.start, tt.offs, paren, bracket); got != tt.want {
+				t.Errorf("highlight(%q, %d, %v) = %q, want %q", tt.s, tt.start, tt.offs, got, tt.want)
+			}
+		})
 	}
 }

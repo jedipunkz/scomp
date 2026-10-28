@@ -8,7 +8,8 @@ import (
 
 // FuzzSearchQuery runs arbitrary query strings through Search. The invariants
 // below mirror what the TUI list rendering relies on: result indices stay in
-// range and keep the sorted order (strictly increasing), every match offset
+// range and keep the sorted order (strictly increasing), match offsets are
+// sorted ascending, every match offset
 // stays inside the search key and covers exactly the bytes of the free-text term
 // occurrences (no byte missing, none extra), and an
 // empty query passes the whole (already filtered) input through unchanged.
@@ -39,6 +40,9 @@ func FuzzSearchQuery(f *testing.F) {
 			prev = r.Index
 			key := norms[r.Index].Key
 			offs := termOffsets(key, terms)
+			if !slices.IsSorted(offs) {
+				t.Fatalf("match offsets %v not sorted, highlight walks them in order", offs)
+			}
 			for _, off := range offs {
 				if off < 0 || off >= len(key) {
 					t.Fatalf("match offset %d out of range for key %q", off, key)
