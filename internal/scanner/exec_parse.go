@@ -67,9 +67,63 @@ type group struct {
 	maxSeverity string
 }
 
+// vuln is the per-advisory data a finding is built from. Parse fills it from
+// the JSON output and convert from the in-process osv-scanner results, so both
+// scanners share the grouping, dedup, alias and severity rules below.
+type vuln struct {
+	aliases             []string
+	summary, details    string
+	published, modified time.Time
+	dbSeverity          string   // database_specific.severity label
+	fixed               []string // fixed versions for the enclosing package, deduplicated
+	references          []string // reference URLs, deduplicated
+}
+
+// appendPackage appends one finding per vulnerability group of pkg
+// (osv-scanner merges aliased advisories such as GO-… and GHSA-… into one
+// group) and skips findings already recorded in seen. Without groups, every
+// vulnerability becomes its own group.
+//
+// The package has n vulnerabilities; id(i) returns the ID of the i-th and
+// load(i) extracts its details. Only the vulnerability backing a group is
+// loaded, so aliased advisories that never surface cost nothing.
+func appendPackage(findings []model.Finding, seen map[string]bool, pkg model.Package, groups []group,
+	n int, id func(int) string, load func(int) vuln,
+) []model.Finding {
+	byID := map[string]int{}
+	for i := range n {
+		byID[id(i)] = i // a repeated ID resolves to its last entry
+	}
+	if len(groups) == 0 {
+		for i := range n {
+			groups = append(groups, group{ids: []string{id(i)}})
+		}
+	}
+	for _, g := range groups {
+		var v vuln
+		found := false
+		for _, gid := range g.ids {
+			if i, ok := byID[gid]; ok {
+				v, found = load(i), true
+				break
+			}
+		}
+		f, ok := buildFinding(pkg, g, v, found)
+		if !ok {
+			continue
+		}
+		k := pkg.Source + "\x00" + pkg.Ecosystem + "\x00" + pkg.Name + "\x00" + pkg.Version + "\x00" + f.ID
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		findings = append(findings, f)
+	}
+	return findings
+}
+
 // Parse converts osv-scanner JSON output into findings.
-// One finding is produced per vulnerability group (osv-scanner merges
-// aliased advisories such as GO-… and GHSA-… into one group).
+// One finding is produced per vulnerability group.
 func Parse(data []byte, root string) ([]model.Finding, error) {
 	var out osvOutput
 	if err := json.Unmarshal(data, &out); err != nil {
@@ -87,39 +141,58 @@ func Parse(data []byte, root string) ([]model.Finding, error) {
 				Ecosystem: p.Package.Ecosystem,
 				Source:    source,
 			}
-			vulns := map[string]*osvVuln{}
-			for i := range p.Vulnerabilities {
-				vulns[p.Vulnerabilities[i].ID] = &p.Vulnerabilities[i]
-			}
-
 			groups := make([]group, 0, len(p.Groups))
 			for _, g := range p.Groups {
 				groups = append(groups, group{ids: g.IDs, aliases: g.Aliases, maxSeverity: g.MaxSeverity})
 			}
-			if len(groups) == 0 {
-				for _, v := range p.Vulnerabilities {
-					groups = append(groups, group{ids: []string{v.ID}})
-				}
-			}
-
-			for _, g := range groups {
-				f, ok := buildFinding(pkg, g, vulns)
-				if !ok {
-					continue
-				}
-				k := pkg.Source + "\x00" + pkg.Ecosystem + "\x00" + pkg.Name + "\x00" + pkg.Version + "\x00" + f.ID
-				if seen[k] {
-					continue
-				}
-				seen[k] = true
-				findings = append(findings, f)
-			}
+			vs := p.Vulnerabilities
+			findings = appendPackage(findings, seen, pkg, groups, len(vs),
+				func(i int) string { return vs[i].ID },
+				func(i int) vuln { return jsonVuln(&vs[i], pkg) })
 		}
 	}
 	return findings, nil
 }
 
-func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.Finding, bool) {
+func jsonVuln(v *osvVuln, pkg model.Package) vuln {
+	out := vuln{
+		aliases:    v.Aliases,
+		summary:    v.Summary,
+		details:    v.Details,
+		published:  v.Published,
+		modified:   v.Modified,
+		dbSeverity: v.DatabaseSpecific.Severity,
+	}
+	for _, a := range v.Affected {
+		if a.Package.Name != pkg.Name || !sameEcosystem(a.Package.Ecosystem, pkg.Ecosystem) {
+			continue
+		}
+		for _, r := range a.Ranges {
+			if r.Type == "GIT" {
+				continue // GIT range events are commit hashes
+			}
+			for _, e := range r.Events {
+				out.fixed = appendUnique(out.fixed, e.Fixed)
+			}
+		}
+	}
+	for _, r := range v.References {
+		out.references = appendUnique(out.references, r.URL)
+	}
+	return out
+}
+
+// appendUnique appends s unless it is empty or already in ss.
+func appendUnique(ss []string, s string) []string {
+	if s == "" || slices.Contains(ss, s) {
+		return ss
+	}
+	return append(ss, s)
+}
+
+// buildFinding builds the finding for group g from v, the vulnerability
+// backing it; found is false when the output has none of the group's IDs.
+func buildFinding(pkg model.Package, g group, v vuln, found bool) (model.Finding, bool) {
 	if len(g.ids) == 0 || g.ids[0] == "" {
 		// An empty first ID would produce a row with no ID and a broken
 		// osv.dev link; real osv-scanner output never contains one, but the
@@ -135,13 +208,6 @@ func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.
 		// characters.
 		return model.Finding{}, false
 	}
-	var v *osvVuln
-	for _, gid := range g.ids {
-		if v = vulns[gid]; v != nil {
-			break
-		}
-	}
-
 	f := model.Finding{ID: id, Package: pkg}
 	aliasSet := map[string]bool{}
 	addAliases := func(as []string) {
@@ -154,18 +220,16 @@ func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.
 	addAliases(g.ids)
 	addAliases(g.aliases)
 
-	if v != nil {
-		addAliases(v.Aliases)
-		f.Summary = v.Summary
-		f.Details = v.Details
-		f.Published = v.Published
-		f.Modified = v.Modified
-		f.FixedVersions = fixedVersions(v, pkg)
-		for _, r := range v.References {
-			if r.URL != "" && !slices.Contains(f.References, r.URL) {
-				f.References = append(f.References, r.URL)
-			}
-		}
+	if found {
+		addAliases(v.aliases)
+		f.Summary = v.summary
+		f.Details = v.details
+		f.Published = v.published
+		f.Modified = v.modified
+		// load builds these slices afresh for every group, so the finding
+		// owns them.
+		f.FixedVersions = v.fixed
+		f.References = v.references
 	}
 
 	for a := range aliasSet {
@@ -187,8 +251,8 @@ func buildFinding(pkg model.Package, g group, vulns map[string]*osvVuln) (model.
 		f.CVSSScore = score
 		f.Severity = model.SeverityFromScore(score)
 	}
-	if f.Severity == model.SeverityUnknown && v != nil {
-		f.Severity = model.SeverityFromLabel(v.DatabaseSpecific.Severity)
+	if f.Severity == model.SeverityUnknown && found {
+		f.Severity = model.SeverityFromLabel(v.dbSeverity)
 	}
 	return f, true
 }
@@ -206,28 +270,6 @@ func validOSVID(id string) bool {
 		}
 	}
 	return id != ""
-}
-
-// fixedVersions collects "fixed" events for the affected entry matching pkg.
-// GIT ranges are skipped because their events are commit hashes.
-func fixedVersions(v *osvVuln, pkg model.Package) []string {
-	var fixed []string
-	for _, a := range v.Affected {
-		if a.Package.Name != pkg.Name || !sameEcosystem(a.Package.Ecosystem, pkg.Ecosystem) {
-			continue
-		}
-		for _, r := range a.Ranges {
-			if r.Type == "GIT" {
-				continue
-			}
-			for _, e := range r.Events {
-				if e.Fixed != "" && !slices.Contains(fixed, e.Fixed) {
-					fixed = append(fixed, e.Fixed)
-				}
-			}
-		}
-	}
-	return fixed
 }
 
 // sameEcosystem compares ecosystems ignoring case and release suffixes

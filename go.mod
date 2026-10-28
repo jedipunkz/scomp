@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/google/osv-scanner/v2 v2.7.0
+	github.com/ossf/osv-schema/bindings/go v0.0.0-20260902031056-b388a18021a3
 )
 
 require (
@@ -103,7 +104,6 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/ossf/osv-schema/bindings/go v0.0.0-20260902031056-b388a18021a3 // indirect
 	github.com/owenrumney/go-sarif/v3 v3.3.1 // indirect
 	github.com/package-url/packageurl-go v0.1.7 // indirect
 	github.com/pandatix/go-cvss v0.6.4 // indirect
