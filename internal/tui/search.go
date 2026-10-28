@@ -300,9 +300,10 @@ func (q *query) match(f *model.Finding, n *Normalized) bool {
 
 // termOffsets returns the byte offsets covered by every occurrence of every
 // term in the (lowercased) key: each occurrence contributes start..start+len-1.
-// Overlapping terms may yield duplicate offsets. The slice is sized up front so
-// it is allocated once per call. It runs per visible row at render time, not
-// per match in Search.
+// The offsets are sorted ascending for highlight's cursor walk; overlapping
+// terms may yield duplicate offsets. The slice is sized up front so it is
+// allocated once per call and sorted in place. It runs per visible row at
+// render time, not per match in Search.
 func termOffsets(key string, terms []string) []int {
 	n := 0
 	for _, t := range terms {
@@ -323,6 +324,10 @@ func termOffsets(key string, terms []string) []int {
 			}
 			i += j + len(t)
 		}
+	}
+	if len(terms) > 1 {
+		// Each term's offsets are already ascending; only several terms interleave.
+		slices.Sort(off)
 	}
 	return off
 }

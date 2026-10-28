@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -330,10 +331,7 @@ func (m Model) listLines(w, h int) []string {
 		f := m.findings[r.Index]
 		lay := m.layouts[r.Index]
 		// Offsets are computed here, for visible rows only, not per match in Search.
-		matched := map[int]bool{}
-		for _, o := range termOffsets(m.norm[r.Index].Key, m.terms) {
-			matched[o] = true
-		}
+		matched := termOffsets(m.norm[r.Index].Key, m.terms)
 		nameSt, verSt, idSt := stylePackage, styleVersion, styleID
 		sumSt := styleSummary
 		marker := "  "
@@ -400,34 +398,46 @@ func (m Model) emptyMessage(w int) []string {
 }
 
 // highlight renders s (which starts at byte offset start in the search key)
-// with the matched key offsets highlighted.
-func highlight(s string, start int, matched map[int]bool, base, hl lipgloss.Style) string {
-	if len(matched) == 0 {
+// with the matched key offsets highlighted. offs must be sorted ascending, as
+// termOffsets returns them; duplicates are fine. A rune is highlighted when
+// its first byte is matched. One cursor walk over offs cuts s into runs by
+// byte offset, and each run is rendered once. s is valid UTF-8 (setFindings
+// sanitizes findings), so the cut bytes equal the re-encoded runes.
+func highlight(s string, start int, offs []int, base, hl lipgloss.Style) string {
+	if len(offs) == 0 {
+		return base.Render(s)
+	}
+	c, _ := slices.BinarySearch(offs, start)
+	if c == len(offs) || offs[c] >= start+len(s) {
+		// No match inside s: a single base run, or nothing for an empty s.
+		if s == "" {
+			return ""
+		}
 		return base.Render(s)
 	}
 	var b strings.Builder
-	var run strings.Builder
-	runHL := false
-	flush := func() {
-		if run.Len() == 0 {
+	runStart, runHL := 0, false
+	write := func(end int) {
+		if end == runStart {
 			return
 		}
 		if runHL {
-			b.WriteString(hl.Render(run.String()))
+			b.WriteString(hl.Render(s[runStart:end]))
 		} else {
-			b.WriteString(base.Render(run.String()))
+			b.WriteString(base.Render(s[runStart:end]))
 		}
-		run.Reset()
 	}
-	for i, r := range s {
-		hl := matched[start+i]
-		if hl != runHL {
-			flush()
-			runHL = hl
+	for i := range s {
+		o := start + i
+		for c < len(offs) && offs[c] < o {
+			c++
 		}
-		run.WriteRune(r)
+		if isHL := c < len(offs) && offs[c] == o; isHL != runHL {
+			write(i)
+			runStart, runHL = i, isHL
+		}
 	}
-	flush()
+	write(len(s))
 	return b.String()
 }
 
