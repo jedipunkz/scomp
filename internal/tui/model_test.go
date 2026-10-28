@@ -530,3 +530,14 @@ func TestListLinesHighlightsQueryTerms(t *testing.T) {
 			len(m.results), m.terms, len(m.findings))
 	}
 }
+
+func TestSevLabelMatchesRender(t *testing.T) {
+	for s := model.SeverityUnknown; s <= model.SeverityCritical+1; s++ {
+		if got, want := sevLabel(s), severityStyles[s].Render(pad(s.Short(), 4)); got != want {
+			t.Errorf("sevLabel(%d) = %q, want %q", s, got, want)
+		}
+	}
+	if want := styleMarker.Render("▶ "); markerSel != want {
+		t.Errorf("markerSel = %q, want %q", markerSel, want)
+	}
+}
