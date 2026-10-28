@@ -18,7 +18,7 @@ type Filter struct {
 	FixedOnly   bool
 }
 
-func (f Filter) match(x model.Finding) bool {
+func (f Filter) match(x *model.Finding) bool {
 	if f.MinSeverity != model.SeverityUnknown && x.Severity < f.MinSeverity {
 		return false
 	}
@@ -264,8 +264,9 @@ func containsAll(s string, terms []string) bool {
 }
 
 // match reports whether the finding satisfies every constraint of the query.
-// n carries the precomputed lowercase text of f (see Normalize).
-func (q query) match(f model.Finding, n Normalized) bool {
+// n carries the precomputed lowercase text of f (see Normalize). Both are
+// passed by pointer so the per-finding loop in Search copies neither.
+func (q *query) match(f *model.Finding, n *Normalized) bool {
 	if !containsAll(n.Key, q.terms) {
 		return false
 	}
@@ -330,11 +331,12 @@ func termOffsets(key string, terms []string) []int {
 func Search(findings []model.Finding, norms []Normalized, queryStr string, f Filter) []Result {
 	q := parseQuery(queryStr)
 	var out []Result
-	for i, x := range findings {
+	for i := range findings {
+		x := &findings[i]
 		if !f.match(x) {
 			continue
 		}
-		if !q.match(x, norms[i]) {
+		if !q.match(x, &norms[i]) {
 			continue
 		}
 		out = append(out, Result{Index: i, Matched: termOffsets(norms[i].Key, q.terms)})
