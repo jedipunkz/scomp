@@ -45,6 +45,14 @@ func (h helpKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{h.ShortHelp()}
 }
 
+// hasStatus reports whether statusLine is non-empty without rendering it.
+// Layout code calls it several times per frame; statusLine runs Sanitize and
+// a lipgloss Render, which never returns "" for a set status, so the two
+// agree.
+func (m Model) hasStatus() bool {
+	return m.scanErr != nil || m.status != ""
+}
+
 func (m Model) statusLine() string {
 	if m.scanErr != nil {
 		msg := "error: " + errLine(m.scanErr)
@@ -135,7 +143,7 @@ func (m Model) issueModalLines(w, h int) []string {
 
 func (m Model) bodyHeight() int {
 	h := m.height - headerLines - chromeLines
-	if m.statusLine() != "" {
+	if m.hasStatus() {
 		h--
 	}
 	return max(1, h)
