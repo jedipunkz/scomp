@@ -3,7 +3,7 @@ package repo
 
 import (
 	"context"
-	"io/fs"
+	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/jedipunkz/scomp/internal/model"
 )
 
@@ -59,6 +60,9 @@ var LockfileNames = []string{
 	"bom.json", "bom.xml", "*.cdx.json", "*.cdx.xml", "*.spdx", "*.spdx.*",
 }
 
+// skipDirs are directory names that are never walked. osv-scanner v2.7.0 has
+// no built-in directory name list (it skips only --experimental-exclude and
+// .gitignore matches); these names predate the .gitignore check below.
 var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true}
 
 // FindRoot returns the Git top-level directory containing path.
@@ -76,30 +80,80 @@ func FindRoot(ctx context.Context, path string) (root string, inGit bool, err er
 }
 
 // ListLockfiles returns the lockfiles under root as sorted slash-separated relative paths.
+//
+// Paths matched by a .gitignore file under root are skipped, as the scanner
+// skips them: osv-scanner v2.7.0 sets osv-scalibr's UseGitignore (unless
+// --no-ignore), and osv-scalibr's walker neither descends into an ignored
+// directory nor reads an ignored file. Patterns are parsed the same way as
+// osv-scalibr's extractor/filesystem/internal/gitignore.go. .gitignore files
+// above root are not read; osv-scanner applies those too, so this walk skips
+// a subset of what the scanner skips and never drops a file the scanner reads
+// from the cache key.
 func ListLockfiles(root string) ([]string, error) {
 	var files []string
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if p != root && skipDirs[d.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !d.Type().IsRegular() || !isLockfile(d.Name()) {
-			return nil
-		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return err
-		}
-		files = append(files, filepath.ToSlash(rel))
-		return nil
-	})
+	err := walkLockfiles(root, nil, nil, &files)
 	slices.Sort(files)
 	return files, err
+}
+
+// walkLockfiles appends the lockfiles under dir to files. rel is dir relative
+// to the walk root as path components; ignores holds the .gitignore matchers
+// of dir's ancestors up to the walk root.
+func walkLockfiles(dir string, rel []string, ignores []gitignore.Matcher, files *[]string) error {
+	if m := readGitignore(dir, rel); m != nil {
+		ignores = append(ignores[:len(ignores):len(ignores)], m)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		childRel := append(rel[:len(rel):len(rel)], name)
+		switch {
+		case e.IsDir():
+			if skipDirs[name] || ignored(ignores, childRel, true) {
+				continue
+			}
+			if err := walkLockfiles(filepath.Join(dir, name), childRel, ignores, files); err != nil {
+				return err
+			}
+		case e.Type().IsRegular() && isLockfile(name) && !ignored(ignores, childRel, false):
+			*files = append(*files, strings.Join(childRel, "/"))
+		}
+	}
+	return nil
+}
+
+// readGitignore parses dir/.gitignore like osv-scalibr's ParseDirForGitignore.
+// It returns nil when the file is missing or unreadable: skipping less is
+// always safe for the cache key.
+func readGitignore(dir string, rel []string) gitignore.Matcher {
+	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		return nil
+	}
+	var ps []gitignore.Pattern
+	for line := range strings.Lines(string(data)) {
+		line = strings.TrimRight(line, "\r\n")
+		if !strings.HasPrefix(line, "#") && strings.TrimSpace(line) != "" {
+			ps = append(ps, gitignore.ParsePattern(line, rel))
+		}
+	}
+	if len(ps) == 0 {
+		return nil
+	}
+	return gitignore.NewMatcher(ps)
+}
+
+// ignored reports whether any matcher ignores p, like osv-scalibr's GitignoreMatch.
+func ignored(ignores []gitignore.Matcher, p []string, isDir bool) bool {
+	for _, m := range ignores {
+		if m.Match(p, isDir) {
+			return true
+		}
+	}
+	return false
 }
 
 // isLockfile reports whether name matches an entry of LockfileNames. The SBOM
