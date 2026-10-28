@@ -329,20 +329,20 @@ func (m Model) listLines(w, h int) []string {
 		r := m.results[i]
 		f := m.findings[r.Index]
 		lay := m.layouts[r.Index]
+		// Offsets are computed here, for visible rows only, not per match in Search.
 		matched := map[int]bool{}
-		for _, o := range r.Matched {
+		for _, o := range termOffsets(m.norm[r.Index].Key, m.terms) {
 			matched[o] = true
 		}
 		nameSt, verSt, idSt := stylePackage, styleVersion, styleID
 		sumSt := styleSummary
 		marker := "  "
 		if i == m.cursor {
-			marker = styleMarker.Render("▶ ")
+			marker = markerSel
 			nameSt, verSt, idSt, sumSt = stylePackageSel, styleVersionSel, styleIDSel, styleSummarySel
 		}
-		sev := severityStyles[f.Severity].Render(pad(f.Severity.Short(), 4))
 		cols := []string{
-			marker + sev,
+			marker + sevLabel(f.Severity),
 			fit(highlight(f.Package.Name, lay.name, matched, nameSt, styleHighlight), nameW),
 			fit(verSt.Render(f.Package.Version), verW),
 			fit(highlight(f.ID, lay.id, matched, idSt, styleHighlight), idW),
@@ -351,6 +351,32 @@ func (m Model) listLines(w, h int) []string {
 		lines[row] = fit(strings.Join(cols, "  "), w)
 	}
 	return lines
+}
+
+// markerSel and sevLabels are the bounded set of list-row labels, rendered
+// once instead of per visible row per frame. lipgloss v2 Render emits the
+// same bytes regardless of the terminal (the renderer downsamples colors on
+// output), so rendering at init is byte-identical to rendering per frame.
+var (
+	markerSel = styleMarker.Render("▶ ")
+	sevLabels = func() (l [model.SeverityCritical + 1]string) {
+		for s := range l {
+			l[s] = renderSevLabel(model.Severity(s))
+		}
+		return l
+	}()
+)
+
+func renderSevLabel(s model.Severity) string {
+	return severityStyles[s].Render(pad(s.Short(), 4))
+}
+
+// sevLabel returns the padded, styled severity column of a list row.
+func sevLabel(s model.Severity) string {
+	if s >= 0 && int(s) < len(sevLabels) {
+		return sevLabels[s]
+	}
+	return renderSevLabel(s)
 }
 
 func (m Model) emptyMessage(w int) []string {

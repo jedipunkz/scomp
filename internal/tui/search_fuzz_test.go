@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -22,9 +23,12 @@ func FuzzSearchQuery(f *testing.F) {
 	}
 	findings, norms := genFindings(200)
 	f.Fuzz(func(t *testing.T, query string) {
-		results := Search(findings, norms, query, Filter{})
+		results, terms := Search(nil, findings, norms, query, Filter{})
 		prev := -1
 		q := parseQuery(query)
+		if !slices.Equal(terms, q.terms) {
+			t.Fatalf("Search terms = %q, want parsed terms %q", terms, q.terms)
+		}
 		for _, r := range results {
 			if r.Index < 0 || r.Index >= len(findings) {
 				t.Fatalf("result index %d out of range [0,%d)", r.Index, len(findings))
@@ -34,7 +38,8 @@ func FuzzSearchQuery(f *testing.F) {
 			}
 			prev = r.Index
 			key := norms[r.Index].Key
-			for _, off := range r.Matched {
+			offs := termOffsets(key, terms)
+			for _, off := range offs {
 				if off < 0 || off >= len(key) {
 					t.Fatalf("match offset %d out of range for key %q", off, key)
 				}
@@ -54,7 +59,7 @@ func FuzzSearchQuery(f *testing.F) {
 				}
 			}
 			matched := map[int]bool{}
-			for _, off := range r.Matched {
+			for _, off := range offs {
 				if !covered[off] {
 					t.Fatalf("match offset %d is not inside a term occurrence in key %q", off, key)
 				}

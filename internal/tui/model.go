@@ -108,6 +108,7 @@ type Model struct {
 	idMaxW    int
 
 	results []Result
+	terms   []string // folded free-text terms of the current query; view.go highlights them
 	cursor  int
 	offset  int // first visible row in the list
 
@@ -342,7 +343,8 @@ func (m *Model) refresh() {
 // refreshKeep recomputes the visible results. keep is the index into m.findings
 // to keep selected when only filters or data changed; -1 selects the first row.
 func (m *Model) refreshKeep(keep int) {
-	m.results = Search(m.findings, m.norm, m.input.Value(), m.filter())
+	// Passing the previous results reuses their capacity (no regrowth per keystroke).
+	m.results, m.terms = Search(m.results, m.findings, m.norm, m.input.Value(), m.filter())
 	m.cursor = 0
 	if m.input.Value() == "" && keep >= 0 {
 		// Keep the selection when only filters or data changed.
