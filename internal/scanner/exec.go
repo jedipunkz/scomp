@@ -45,7 +45,9 @@ func NewExec(offline bool) (*Exec, error) {
 
 // Args returns the osv-scanner arguments for scanning root.
 func (e *Exec) Args(root string) []string {
-	args := []string{"scan", "source", "-r", root, "--format", "json"}
+	// --experimental-exclude (v2.3.3+) instead of its v2.7.0 alias --x-exclude
+	// so older v2 binaries in PATH keep working.
+	args := []string{"scan", "source", "-r", root, "--format", "json", "--experimental-exclude", excludeTestdata}
 	if e.Offline {
 		// Only the vulnerability database is downloaded; package names
 		// are not sent to osv.dev or deps.dev.

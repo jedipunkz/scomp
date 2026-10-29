@@ -76,7 +76,7 @@ External commands (exec impl only): `osv-scanner` (v2), `git`.
 
 1. Parse flags.
 2. Get the root via `git rev-parse --show-toplevel`. If outside Git, use the current directory as the root and print a one-line warning.
-3. List lockfiles under the root (walk using the target file names in §9; exclude `.git/`, `node_modules/`, `vendor/`).
+3. List lockfiles under the root (walk using the target file names in §9; exclude `.git/`, `node_modules/`, `vendor/`, `testdata/`).
 4. Compute SHA-256 from the scanner identity (scomp version, scanner and its version or path, `--offline`) and the paths and contents of the listed lockfiles, and use it as the cache key.
 5. If the cache exists, the key matches, and it is within TTL, read `[]Finding` from the cache.
 6. Otherwise, start the TUI first showing "scanning", and run the scanner as a background `tea.Cmd`.
@@ -122,7 +122,7 @@ Reason for implementing exec first: it is the smallest amount of code, and it au
 - Call `osvscanner.DoScan` directly. Enables single-binary distribution.
 - Migration condition: once the TUI is complete with the exec implementation and the v2 library API stability is confirmed.
 - Switch with the flag `--scanner=exec|lib`. lib is the default (users no longer need to install osv-scanner).
-- `ScannerActions` mirrors what `osv-scanner scan source -r <root>` builds from its default flags (plugins `lockfile`, `sbom`, `directory`; call analysis `go` only). `--offline` sets `CompareOffline`, `DownloadDatabases` and `TransitiveScanning.Disabled`, matching the exec arguments.
+- `ScannerActions` mirrors what `osv-scanner scan source -r <root>` builds from its default flags (plugins `lockfile`, `sbom`, `directory`; call analysis `go` only), plus an exclude for `testdata` directories (`r:(^|/)testdata$`, also passed to exec as `--experimental-exclude`) because they hold test fixtures. `--offline` sets `CompareOffline`, `DownloadDatabases` and `TransitiveScanning.Disabled`, matching the exec arguments.
 - The result is marshaled to JSON and passed to the same parser as exec, so both produce identical findings. `TestLibMatchesExec` (run with `SCOMP_INTEGRATION=1`) checks this.
 - `DoScan` takes no context: it runs in a goroutine, and on cancel its result is dropped.
 - osvscanner logs through a process-global logger. It is redirected with `osvscanner.SetLogger` into a buffer (shown as the error details on failure) so it does not corrupt the TUI, and scans are serialized.

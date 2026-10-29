@@ -29,6 +29,7 @@ func TestListLockfiles(t *testing.T) {
 		"web/package-lock.json",
 		"web/node_modules/x/package-lock.json",
 		"vendor/y/go.mod",
+		"testdata/demo/go.mod",
 		".git/go.mod",
 		"py/requirements.txt",
 		"README.md",

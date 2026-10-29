@@ -64,6 +64,7 @@ func (l Lib) Actions(root string) osvscanner.ScannerActions {
 		CallAnalysisStates: map[string]bool{"go": true, "rust": false, "jar": false},
 	}
 	a.PluginsEnabled = []string{"lockfile", "sbom", "directory"}
+	a.ExcludePatterns = []string{excludeTestdata}
 	a.RequestUserAgent = "scomp"
 	if l.Offline {
 		a.CompareOffline = true

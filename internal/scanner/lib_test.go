@@ -23,6 +23,9 @@ func TestLibActions(t *testing.T) {
 	if !reflect.DeepEqual(a.PluginsEnabled, []string{"lockfile", "sbom", "directory"}) {
 		t.Errorf("plugins = %v, want the scan source defaults", a.PluginsEnabled)
 	}
+	if !reflect.DeepEqual(a.ExcludePatterns, []string{excludeTestdata}) {
+		t.Errorf("exclude = %v, want testdata excluded like Exec", a.ExcludePatterns)
+	}
 
 	off := Lib{Offline: true}.Actions("/r")
 	if !off.CompareOffline || !off.DownloadDatabases || !off.TransitiveScanning.Disabled {

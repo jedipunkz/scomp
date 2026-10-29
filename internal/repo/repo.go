@@ -63,7 +63,8 @@ var LockfileNames = []string{
 // skipDirs are directory names that are never walked. osv-scanner v2.7.0 has
 // no built-in directory name list (it skips only --experimental-exclude and
 // .gitignore matches); these names predate the .gitignore check below.
-var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true}
+// testdata matches the scanner's exclude pattern (internal/scanner).
+var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": true, "testdata": true}
 
 // FindRoot returns the Git top-level directory containing path.
 // If path is not inside a Git repository, it returns the absolute path and inGit=false.
