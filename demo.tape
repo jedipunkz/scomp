@@ -4,7 +4,9 @@
 #
 # Requires vhs and its dependencies (ttyd, ffmpeg) on PATH.
 # testdata/demo is copied to /tmp/scomp-demo as the scan target; the scan
-# itself runs against the OSV API, so network access is needed.
+# itself runs against the OSV API, so network access is needed. The fixture
+# is stored as go.mod.demo so scanning this repository does not report its
+# intentionally vulnerable versions; it is renamed to go.mod in the copy.
 
 Output demo.gif
 Set FontSize 15
@@ -14,7 +16,7 @@ Set Padding 12
 Set WaitTimeout 60s
 
 Hide
-Type "test -d /tmp/scomp-demo || (cp -r testdata/demo /tmp/scomp-demo && git -C /tmp/scomp-demo init -q)"
+Type "test -d /tmp/scomp-demo || (cp -r testdata/demo /tmp/scomp-demo && mv /tmp/scomp-demo/go.mod.demo /tmp/scomp-demo/go.mod && git -C /tmp/scomp-demo init -q)"
 Enter
 Sleep 2s
 Show
