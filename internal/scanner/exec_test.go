@@ -90,7 +90,7 @@ func TestExecScanExitCodes(t *testing.T) {
 
 func TestExecArgs(t *testing.T) {
 	online := (&Exec{}).Args("/r")
-	if want := []string{"scan", "source", "-r", "/r", "--format", "json"}; !slices.Equal(online, want) {
+	if want := []string{"scan", "source", "-r", "/r", "--format", "json", "--no-call-analysis=go"}; !slices.Equal(online, want) {
 		t.Errorf("online args = %v, want %v", online, want)
 	}
 	offline := (&Exec{Offline: true}).Args("/r")

@@ -122,7 +122,7 @@ Reason for implementing exec first: it is the smallest amount of code, and it au
 - Call `osvscanner.DoScan` directly. Enables single-binary distribution.
 - Migration condition: once the TUI is complete with the exec implementation and the v2 library API stability is confirmed.
 - Switch with the flag `--scanner=exec|lib`. lib is the default (users no longer need to install osv-scanner).
-- `ScannerActions` mirrors what `osv-scanner scan source -r <root>` builds from its default flags (plugins `lockfile`, `sbom`, `directory`; call analysis `go` only). `--offline` sets `CompareOffline`, `DownloadDatabases` and `TransitiveScanning.Disabled`, matching the exec arguments.
+- `ScannerActions` mirrors what `osv-scanner scan source -r <root>` builds from its default flags (plugins `lockfile`, `sbom`, `directory`), except that call analysis is off (`--no-call-analysis=go` for exec). Go call analysis runs govulncheck once per vulnerable module, serially, and scomp does not show reachability (§16), so the result would be discarded. `--offline` sets `CompareOffline`, `DownloadDatabases` and `TransitiveScanning.Disabled`, matching the exec arguments.
 - The result is marshaled to JSON and passed to the same parser as exec, so both produce identical findings. `TestLibMatchesExec` (run with `SCOMP_INTEGRATION=1`) checks this.
 - `DoScan` takes no context: it runs in a goroutine, and on cancel its result is dropped.
 - osvscanner logs through a process-global logger. It is redirected with `osvscanner.SetLogger` into a buffer (shown as the error details on failure) so it does not corrupt the TUI, and scans are serialized.
