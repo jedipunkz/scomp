@@ -45,7 +45,8 @@ func NewExec(offline bool) (*Exec, error) {
 
 // Args returns the osv-scanner arguments for scanning root.
 func (e *Exec) Args(root string) []string {
-	args := []string{"scan", "source", "-r", root, "--format", "json"}
+	// Call analysis is off, as in Lib.Actions.
+	args := []string{"scan", "source", "-r", root, "--format", "json", "--no-call-analysis=go"}
 	if e.Offline {
 		// Only the vulnerability database is downloaded; package names
 		// are not sent to osv.dev or deps.dev.

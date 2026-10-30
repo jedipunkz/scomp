@@ -55,13 +55,15 @@ func (b *syncBuffer) take() string {
 }
 
 // Actions returns the scanner actions equivalent to
-// `osv-scanner scan source -r <root>` (plus the --offline flags of Exec).
+// `osv-scanner scan source -r <root> --no-call-analysis=go` (plus the
+// --offline flags of Exec).
 func (l Lib) Actions(root string) osvscanner.ScannerActions {
 	a := osvscanner.ScannerActions{
 		DirectoryPaths: []string{root},
 		Recursive:      true,
-		// Same as the CLI default (stable analyses only).
-		CallAnalysisStates: map[string]bool{"go": true, "rust": false, "jar": false},
+		// Call analysis is off: scomp does not show reachability, and Go
+		// call analysis runs govulncheck once per vulnerable module.
+		CallAnalysisStates: map[string]bool{"go": false, "rust": false, "jar": false},
 	}
 	a.PluginsEnabled = []string{"lockfile", "sbom", "directory"}
 	a.RequestUserAgent = "scomp"

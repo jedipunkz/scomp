@@ -23,6 +23,11 @@ func TestLibActions(t *testing.T) {
 	if !reflect.DeepEqual(a.PluginsEnabled, []string{"lockfile", "sbom", "directory"}) {
 		t.Errorf("plugins = %v, want the scan source defaults", a.PluginsEnabled)
 	}
+	for lang, on := range a.CallAnalysisStates {
+		if on {
+			t.Errorf("call analysis for %s must be off: %v", lang, a.CallAnalysisStates)
+		}
+	}
 
 	off := Lib{Offline: true}.Actions("/r")
 	if !off.CompareOffline || !off.DownloadDatabases || !off.TransitiveScanning.Disabled {
