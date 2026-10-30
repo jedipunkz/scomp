@@ -21,7 +21,7 @@ test:
 	$(GO) test -race ./...
 
 bench:
-	$(GO) test -run '^$$' -bench . -benchmem ./internal/tui/ ./internal/scanner/
+	$(GO) test -run '^$$' -bench . -benchmem ./internal/tui/ ./internal/scanner/ ./internal/repo/
 
 clean:
 	rm -f $(BIN)
