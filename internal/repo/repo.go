@@ -156,19 +156,86 @@ func ignored(ignores []gitignore.Matcher, p []string, isDir bool) bool {
 	return false
 }
 
-// isLockfile reports whether name matches an entry of LockfileNames. The SBOM
-// extractors match names case-insensitively, so the lowercased name is also tested.
-func isLockfile(name string) bool {
-	lower := strings.ToLower(name)
-	for _, pat := range LockfileNames {
-		if ok, _ := path.Match(pat, name); ok {
+// lockfiles is LockfileNames split once, because isLockfile runs for every
+// file in the repository before the TUI starts.
+var lockfiles = newNameMatcher(LockfileNames)
+
+// nameMatcher matches base names against path.Match patterns. Patterns
+// without metacharacters become a map lookup and "*<literal>" patterns a
+// suffix test; only the rest go through path.Match, after a quick reject on
+// their longest literal run. A suffix test equals path.Match because base
+// names contain no '/'.
+type nameMatcher struct {
+	exact    map[string]bool
+	suffixes []string
+	globs    []glob
+}
+
+type glob struct {
+	pattern string
+	literal string // every match contains it; empty when unknown
+}
+
+const globMeta = `*?[\`
+
+func newNameMatcher(patterns []string) nameMatcher {
+	m := nameMatcher{exact: map[string]bool{}}
+	for _, p := range patterns {
+		switch {
+		case !strings.ContainsAny(p, globMeta):
+			m.exact[p] = true
+		case p[0] == '*' && !strings.ContainsAny(p[1:], globMeta):
+			m.suffixes = append(m.suffixes, p[1:])
+		default:
+			m.globs = append(m.globs, glob{pattern: p, literal: longestLiteral(p)})
+		}
+	}
+	return m
+}
+
+// longestLiteral returns the longest run of p between '*' and '?'. It returns
+// "" when p has a character class or an escape, whose text is not literal.
+func longestLiteral(p string) string {
+	if strings.ContainsAny(p, `[\`) {
+		return ""
+	}
+	var lit string
+	for _, s := range strings.FieldsFunc(p, func(r rune) bool { return r == '*' || r == '?' }) {
+		if len(s) > len(lit) {
+			lit = s
+		}
+	}
+	return lit
+}
+
+func (m nameMatcher) match(name string) bool {
+	if m.exact[name] {
+		return true
+	}
+	for _, s := range m.suffixes {
+		if strings.HasSuffix(name, s) {
 			return true
 		}
-		if ok, _ := path.Match(pat, lower); ok {
+	}
+	for _, g := range m.globs {
+		if !strings.Contains(name, g.literal) {
+			continue
+		}
+		if ok, _ := path.Match(g.pattern, name); ok {
 			return true
 		}
 	}
 	return false
+}
+
+// isLockfile reports whether name matches an entry of LockfileNames. The SBOM
+// extractors match names case-insensitively, so the lowercased name is also tested.
+func isLockfile(name string) bool {
+	if lockfiles.match(name) {
+		return true
+	}
+	lower := strings.ToLower(name)
+	return lower != name && lockfiles.match(lower)
 }
 
 var scpLike = regexp.MustCompile(`^(?:[^@/]+@)?([^:/]+):(.+)$`)
