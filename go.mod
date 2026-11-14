@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.0
-	charm.land/lipgloss/v2 v2.0.6
+	charm.land/lipgloss/v2 v2.1.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/google/osv-scanner/v2 v2.7.0
